@@ -23,7 +23,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "automated_testing_agent_01",
             "refactoring_agent_01",
             "documentation_agent_01",
-            "version_control_agent_01"
+            "version_control_agent_01",
+            "vulnerability_scan_agent_01",      # New
+            "environment_management_agent_01",  # New
+            "platform_integration_agent_01"     # New
         ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
@@ -389,7 +392,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "automated_testing_agent_01": "automated_testing_tasks",
             "refactoring_agent_01": "refactoring_tasks",
             "documentation_agent_01": "documentation_tasks",
-            "version_control_agent_01": "version_control_tasks"
+            "version_control_agent_01": "version_control_tasks",
+            "vulnerability_scan_agent_01": "vulnerability_scan_tasks",          # New
+            "environment_management_agent_01": "environment_management_tasks",    # New
+            "platform_integration_agent_01": "platform_integration_tasks"     # New
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:

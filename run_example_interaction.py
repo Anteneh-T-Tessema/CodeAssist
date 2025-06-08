@@ -10,6 +10,9 @@ from novapilot_agents.AutomatedTestingAgent import AutomatedTestingAgent
 from novapilot_agents.RefactoringAgent import RefactoringAgent
 from novapilot_agents.DocumentationAgent import DocumentationAgent
 from novapilot_agents.VersionControlAgent import VersionControlAgent
+from novapilot_agents.VulnerabilityScanAgent import VulnerabilityScanAgent
+from novapilot_agents.EnvironmentManagementAgent import EnvironmentManagementAgent
+from novapilot_agents.PlatformIntegrationAgent import PlatformIntegrationAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
@@ -53,6 +56,9 @@ async def main():
     refactorer = RefactoringAgent(agent_id="refactoring_agent_01")
     documenter = DocumentationAgent(agent_id="documentation_agent_01")
     vcs_handler = VersionControlAgent(agent_id="version_control_agent_01")
+    vuln_scanner = VulnerabilityScanAgent(agent_id="vulnerability_scan_agent_01")
+    env_manager = EnvironmentManagementAgent(agent_id="environment_management_agent_01")
+    platform_integrator = PlatformIntegrationAgent(agent_id="platform_integration_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -67,6 +73,9 @@ async def main():
     refactorer_listener_task = asyncio.create_task(refactorer.start_listening())
     documenter_listener_task = asyncio.create_task(documenter.start_listening())
     vcs_handler_listener_task = asyncio.create_task(vcs_handler.start_listening())
+    vuln_scanner_listener_task = asyncio.create_task(vuln_scanner.start_listening())
+    env_manager_listener_task = asyncio.create_task(env_manager.start_listening())
+    platform_integrator_listener_task = asyncio.create_task(platform_integrator.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -306,6 +315,9 @@ async def main():
     await refactorer.stop_listening()
     await documenter.stop_listening()
     await vcs_handler.stop_listening()
+    await vuln_scanner.stop_listening()
+    await env_manager.stop_listening()
+    await platform_integrator.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -336,8 +348,11 @@ async def main():
         debugger_listener_task,
         tester_listener_task,
         refactorer_listener_task,   # New
-        documenter_listener_task, # New
-        vcs_handler_listener_task,  # New
+        documenter_listener_task,
+        vcs_handler_listener_task,
+        vuln_scanner_listener_task,         # New
+        env_manager_listener_task,        # New
+        platform_integrator_listener_task,  # New
         return_exceptions=True
     )
 
