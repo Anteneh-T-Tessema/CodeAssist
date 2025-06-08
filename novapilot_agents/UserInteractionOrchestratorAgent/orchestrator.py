@@ -5,7 +5,7 @@ import os # For os.getcwd()
 from typing import Dict, Optional, Any, Callable, List
 
 from novapilot_core.aci import AgentCommunicationInterface
-from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext # Add ProjectContext
+from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext
 from novapilot_core.message_bus import message_bus
 
 class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
@@ -15,7 +15,14 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         self._active_tasks: Dict[str, Task] = {}
         self._task_results_queue: Optional[asyncio.Queue] = None
         self._agent_capabilities_registry: Dict[str, List[AgentCapability]] = {}
-        self._known_agent_ids: List[str] = ["codegen_agent_01", "code_understanding_agent_01"] # Example
+        # Updated _known_agent_ids
+        self._known_agent_ids: List[str] = [
+            "codegen_agent_01",
+            "code_understanding_agent_01",
+            "code_completion_agent_01",
+            "debugging_agent_01",
+            "automated_testing_agent_01"
+        ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
         self._context_request_queue: Optional[asyncio.Queue] = None
@@ -36,13 +43,12 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     print(f"[{self.agent_id}] Received result for task {result.task_id}: Status='{result.status}', Output='{result.output}', Data='{result.data}'")
                     if result.task_id in self._active_tasks:
                         self._active_tasks[result.task_id].status = result.status
-                        # Potentially store the full result or notify other parts of the system
                     else:
                         print(f"[{self.agent_id}] Warning: Received result for unknown task ID {result.task_id}")
                 elif result == "stop_listening":
                     print(f"[{self.agent_id}] Stop signal received for results listener.")
                     break
-                self._task_results_queue.task_done() # Important for queue management if using join()
+                self._task_results_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in results listener: {e}")
         finally:
@@ -50,19 +56,14 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 await self._message_bus.unsubscribe(results_channel, self._task_results_queue)
             print(f"[{self.agent_id}] Unsubscribed and stopped listening for results.")
 
-    def _initialize_project_context(self): # This can be a synchronous method
-        # For now, create a simple ProjectContext.
-        # root_path will be the current working directory.
-        # In a real app, this might load from a config file or CLI args.
+    def _initialize_project_context(self):
         root_dir = os.getcwd()
-        project_id = str(uuid.uuid4()) # Generate a unique ID for this session/project
+        project_id = str(uuid.uuid4())
         project_name = os.path.basename(root_dir)
-
         self._project_context = ProjectContext(
             project_id=project_id,
             root_path=root_dir,
             project_name=project_name,
-            # main_language, vcs_type, etc., can be None or inferred later
         )
         print(f"[{self.agent_id}] Initialized ProjectContext: ID={project_id}, Name='{project_name}', Root='{root_dir}'")
 
@@ -81,15 +82,13 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                         if self._project_context:
                             await self._message_bus.publish(response_channel, self._project_context)
                         else:
-                            # Should not happen if _initialize_project_context is called in __init__
                             print(f"[{self.agent_id}] Error: ProjectContext not initialized when request received.")
-                            # Optionally publish an error response
                     else:
                         print(f"[{self.agent_id}] Received unknown message on context_requests: {message}")
                 elif message == "stop_listening_context":
                     print(f"[{self.agent_id}] Stop signal received for context_requests listener.")
                     break
-                if self._context_request_queue: # Check queue exists
+                if self._context_request_queue:
                     self._context_request_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in context_requests listener: {e}")
@@ -106,7 +105,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             while True:
                 response = await self._discovery_response_queue.get()
                 if isinstance(response, dict) and response.get("type") == "agent_capabilities_response":
-                    agent_id_resp = response.get("agent_id") # Renamed to avoid conflict
+                    agent_id_resp = response.get("agent_id")
                     capabilities_data = response.get("capabilities")
                     if agent_id_resp and capabilities_data:
                         if isinstance(capabilities_data, list) and all(isinstance(cap, AgentCapability) for cap in capabilities_data):
@@ -119,7 +118,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     break
                 else:
                     print(f"[{self.agent_id}] Received malformed/unexpected message on discovery response channel: {response}")
-                if self._discovery_response_queue: # Check queue exists
+                if self._discovery_response_queue:
                     self._discovery_response_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in discovery responses listener: {e}")
@@ -173,7 +172,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         request_keywords = set(request_text.lower().split())
 
         best_match_agent_id = None
-        best_matched_capability: Optional[AgentCapability] = None # Store the capability object
+        best_matched_capability: Optional[AgentCapability] = None
         highest_score = 0
 
         if not self._agent_capabilities_registry:
@@ -279,9 +278,13 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         if not task.target_agent_id:
             print(f"[{self.agent_id}] Task {task.task_id} has no target_agent_id. Cannot post.")
             return False
+        # Updated channel_map
         channel_map = {
             "codegen_agent_01": "code_generation_tasks",
-            "code_understanding_agent_01": "code_understanding_tasks"
+            "code_understanding_agent_01": "code_understanding_tasks",
+            "code_completion_agent_01": "code_completion_tasks",
+            "debugging_agent_01": "debugging_tasks",
+            "automated_testing_agent_01": "automated_testing_tasks"
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:

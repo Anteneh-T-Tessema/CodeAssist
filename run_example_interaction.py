@@ -4,6 +4,9 @@ import os
 from novapilot_agents.UserInteractionOrchestratorAgent import UserInteractionOrchestratorAgent
 from novapilot_agents.CodeGenerationAgent import CodeGenerationAgent
 from novapilot_agents.CodeUnderstandingAgent import CodeUnderstandingAgent
+from novapilot_agents.CodeCompletionAgent import CodeCompletionAgent
+from novapilot_agents.DebuggingAgent import DebuggingAgent
+from novapilot_agents.AutomatedTestingAgent import AutomatedTestingAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 
@@ -28,6 +31,9 @@ async def main():
     orchestrator = UserInteractionOrchestratorAgent(agent_id="orchestrator_01")
     generator = CodeGenerationAgent(agent_id="codegen_agent_01")
     analyzer = CodeUnderstandingAgent(agent_id="code_understanding_agent_01")
+    completer = CodeCompletionAgent(agent_id="code_completion_agent_01")
+    debugger = DebuggingAgent(agent_id="debugging_agent_01")
+    tester = AutomatedTestingAgent(agent_id="automated_testing_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -36,6 +42,9 @@ async def main():
     orchestrator_listener_task = asyncio.create_task(orchestrator.start_listening())
     generator_listener_task = asyncio.create_task(generator.start_listening())
     analyzer_listener_task = asyncio.create_task(analyzer.start_listening())
+    completer_listener_task = asyncio.create_task(completer.start_listening())
+    debugger_listener_task = asyncio.create_task(debugger.start_listening())
+    tester_listener_task = asyncio.create_task(tester.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -143,6 +152,9 @@ async def main():
     await orchestrator.stop_listening()
     await generator.stop_listening()
     await analyzer.stop_listening()
+    await completer.stop_listening()
+    await debugger.stop_listening()
+    await tester.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -166,9 +178,12 @@ async def main():
     # However, the initial `asyncio.create_task` for agent listeners should also be awaited or gathered.
 
     await asyncio.gather(
-        orchestrator_listener_task, # This is for orchestrator's _listen_for_results and _listen_for_discovery_responses
-        generator_listener_task,    # This is for generator's combined listener setup in its start_listening
-        analyzer_listener_task,     # This is for analyzer's combined listener setup in its start_listening
+        orchestrator_listener_task,
+        generator_listener_task,
+        analyzer_listener_task,
+        completer_listener_task,
+        debugger_listener_task,
+        tester_listener_task,
         return_exceptions=True
     )
 
