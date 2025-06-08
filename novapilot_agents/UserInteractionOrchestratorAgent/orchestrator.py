@@ -23,7 +23,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "automated_testing_agent_01",
             "refactoring_agent_01",
             "documentation_agent_01",
-            "version_control_agent_01"
+            "version_control_agent_01",
+            "vulnerability_scan_agent_01",      # New
+            "environment_management_agent_01",  # New
+            "platform_integration_agent_01"     # New
         ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
@@ -274,6 +277,51 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 except Exception as e:
                     print(f"[{self.agent_id}] Test hook: Error parsing 'refactor rename' request for RefactoringAgent '{request_text}': {e}")
 
+            elif "generate docstring for " in request_text.lower() and target_agent_id == "documentation_agent_01":
+                # Example: "generate docstring for my_function in file src/utils.py"
+                try:
+                    text_to_parse_lower = request_text.lower() # Use lowercased for parsing structure
+
+                    # Extract 'function_name' (part after "for " and before " in file ")
+                    # "generate docstring for FUNCTION_NAME in file FILE_PATH"
+                    # Split by " in file " first to isolate "generate docstring for FUNCTION_NAME"
+                    part_before_file = text_to_parse_lower.split(" in file ", 1)[0]
+                    # function_name_part_lower = part_before_file.split("generate docstring for ", 1)[1].strip() # unused lowercase intermediate
+
+                    # Extract 'file_path' from original request_text to preserve case
+                    # (part after " in file ")
+                    original_request_parts = request_text.split(" in file ", 1) # Use original case for file path
+                    file_path_part = original_request_parts[1].strip()
+
+                    # Re-extract function_name from original_request_text to preserve case
+                    temp_parts_for_func_name = request_text.split("generate docstring for ", 1)[1].split(" in file ", 1)[0]
+                    original_function_name = temp_parts_for_func_name.strip()
+
+                    task_data["function_name"] = original_function_name # Use original case
+                    task_data["file_path"] = file_path_part
+
+                    # Populate other required keys for "generate_function_docstring" capability
+                    # Current capability: required_input_keys=["file_path", "function_name", "code_block_lines"]
+                    task_data["code_block_lines"] = [] # Placeholder for now
+
+                    if "description" not in task_data: # Ensure description for orchestrator validation (though it might already be there)
+                        task_data["description"] = request_text
+
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for DocumentationAgent 'docstring' test: "
+                          f"func='{task_data['function_name']}', file='{task_data['file_path']}'.")
+                except IndexError:
+                    print(f"[{self.agent_id}] Test hook: 'generate docstring for' detected for DocumentationAgent, but failed to parse all parts from '{request_text}'. Ensure format '... for FUNCTION_NAME in file FILE_PATH'.")
+                except Exception as e:
+                    print(f"[{self.agent_id}] Test hook: Error parsing 'generate docstring for' request for DocumentationAgent '{request_text}': {e}")
+
+            elif ("git status" in request_text.lower() or "vcs status" in request_text.lower()) and \
+                 target_agent_id == "version_control_agent_01":
+
+                if "description" not in task_data: # Ensure description for orchestrator validation
+                    task_data["description"] = request_text
+
+                print(f"[{self.agent_id}] Test hook: Populated task_data (description) for VersionControlAgent 'status' test.")
+
             # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
             if assigned_task_type == "file_analysis_line_count" and "file_path" not in task_data:
                 potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
@@ -344,7 +392,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "automated_testing_agent_01": "automated_testing_tasks",
             "refactoring_agent_01": "refactoring_tasks",
             "documentation_agent_01": "documentation_tasks",
-            "version_control_agent_01": "version_control_tasks"
+            "version_control_agent_01": "version_control_tasks",
+            "vulnerability_scan_agent_01": "vulnerability_scan_tasks",          # New
+            "environment_management_agent_01": "environment_management_tasks",    # New
+            "platform_integration_agent_01": "platform_integration_tasks"     # New
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:

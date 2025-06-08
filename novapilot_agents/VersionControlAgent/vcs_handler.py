@@ -47,29 +47,58 @@ class VersionControlAgent(AgentCommunicationInterface):
         return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
+        print(f"[{self.agent_id}] Received VersionControl task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        # This agent would heavily use ProjectContext for VCS type, root_path etc.
-        # project_ctx = await self._get_project_context()
-        # if not project_ctx or not project_ctx.vcs_type or project_ctx.vcs_type == "none":
-        #     output_message = "VCS operations require a configured version control system in ProjectContext."
-        #     # ... create failed result ...
-        #     return
+        # This capability ("vcs_git_status_check") doesn't strictly require inputs from task.data,
+        # as it relies on ProjectContext.
 
-        await asyncio.sleep(0.1)
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
 
-        output_message = f"Version control operation '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "vcs_operation_status": "unknown"}
+        project_ctx = await self._get_project_context()
+
+        if project_ctx and project_ctx.vcs_type:
+            if project_ctx.vcs_type.lower() == "git":
+                # Simulate git status
+                simulated_branch = project_ctx.vcs_branch if project_ctx.vcs_branch else "main"
+                simulated_status_output = f"On branch {simulated_branch} (simulated from ProjectContext). Your branch is up to date with 'origin/{simulated_branch}'. Nothing to commit, working tree clean (simulated)."
+
+                result_data_content["git_status_output"] = simulated_status_output
+                result_data_content["current_branch"] = simulated_branch
+                result_data_content["vcs_type_checked"] = "git"
+                output_message = f"Simulated Git status check for project '{project_ctx.project_name if project_ctx.project_name else project_ctx.project_id}'."
+                print(f"[{self.agent_id}] {output_message} VCS type: Git, Branch: {simulated_branch}")
+            else:
+                output_message = f"Project VCS type is '{project_ctx.vcs_type}', not 'git'. Simulated status check not applicable for this type."
+                result_data_content["vcs_type_checked"] = project_ctx.vcs_type
+                result_data_content["status_message"] = "Not a Git repository based on ProjectContext."
+                print(f"[{self.agent_id}] {output_message}")
+        elif project_ctx and not project_ctx.vcs_type:
+            output_message = "ProjectContext does not specify a VCS type. Cannot perform Git status."
+            result_data_content["status_message"] = "VCS type not specified in ProjectContext."
+            print(f"[{self.agent_id}] {output_message}")
+        else: # No ProjectContext available
+            status = "failed" # Or "completed" with an error message in output, depending on strictness.
+                               # Let's make it a failure if context is essential for this agent.
+            output_message = "ProjectContext not available. Cannot perform Git status."
+            result_data_content["error"] = output_message
+            result_data_content["status_message"] = "ProjectContext unavailable."
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published version control result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
