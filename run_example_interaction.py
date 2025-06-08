@@ -13,6 +13,7 @@ from novapilot_agents.VersionControlAgent import VersionControlAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
+SAMPLE_FUNCTION_NAME = "hello_sample" # For DocumentationAgent tests
 
 async def create_sample_files(): # Renamed for clarity, or modify existing
     # Create sample_code.py (existing logic)
@@ -223,6 +224,50 @@ async def main():
     if task_id_refactor2:
         print(f"[Main] Orchestrator accepted request (expected RefactoringAgent, but to fail orchestrator validation), Task ID: {task_id_refactor2}")
 
+    # --- Test DocumentationAgent ---
+    print("\n--- Simulating User Requests for Documentation Agent ---")
+
+    # Test case 1: Valid docstring generation request
+    task_id_doc1 = await orchestrator.receive_user_request(
+        request_text=f"generate docstring for {SAMPLE_FUNCTION_NAME} in file {SAMPLE_FILE_NAME}"
+        # Orchestrator's test hook should parse this and populate task.data.
+    )
+    if task_id_doc1:
+        print(f"[Main] Orchestrator accepted request (expected DocumentationAgent, valid), Task ID: {task_id_doc1}")
+
+    # Test case 2: Request missing file_path (should fail in DocumentationAgent's _process_task or orchestrator validation)
+    task_id_doc2 = await orchestrator.receive_user_request(
+        request_text=f"generate docstring for {SAMPLE_FUNCTION_NAME}"
+    )
+    if task_id_doc2:
+        print(f"[Main] Orchestrator accepted request (expected DocumentationAgent, agent to fail on missing file_path), Task ID: {task_id_doc2}")
+
+    # Test case 3: Request missing function_name (should fail in DocumentationAgent's _process_task or orchestrator validation)
+    task_id_doc3 = await orchestrator.receive_user_request(
+        request_text=f"generate docstring in file {SAMPLE_FILE_NAME}"
+    )
+    if task_id_doc3:
+        print(f"[Main] Orchestrator accepted request (expected DocumentationAgent, agent/orchestrator to fail on missing func_name), Task ID: {task_id_doc3}")
+
+    # --- Test VersionControlAgent ---
+    print("\n--- Simulating User Requests for Version Control Agent ---")
+
+    # Test case 1: Git status request
+    task_id_vcs1 = await orchestrator.receive_user_request(
+        request_text="git status"
+        # Orchestrator's test hook should ensure 'description' is in task.data.
+        # ProjectContext in Orchestrator is currently hardcoded without vcs_type,
+        # so agent should report VCS type not specified or default to non-git behavior.
+    )
+    if task_id_vcs1:
+        print(f"[Main] Orchestrator accepted request (expected VersionControlAgent), Task ID: {task_id_vcs1}")
+
+    # Test case 2: Generic VCS status request
+    task_id_vcs2 = await orchestrator.receive_user_request(
+        request_text="vcs status please"
+    )
+    if task_id_vcs2:
+        print(f"[Main] Orchestrator accepted request (expected VersionControlAgent), Task ID: {task_id_vcs2}")
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
@@ -235,7 +280,9 @@ async def main():
         task_id_completion1,
         task_id_debug1, task_id_debug2,
         task_id_test1, task_id_test2, task_id_test3,
-        task_id_refactor1, task_id_refactor2 # Added here
+        task_id_refactor1, task_id_refactor2,
+        task_id_doc1, task_id_doc2, task_id_doc3,
+        task_id_vcs1, task_id_vcs2 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:

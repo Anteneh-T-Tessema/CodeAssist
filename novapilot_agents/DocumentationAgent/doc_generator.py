@@ -1,6 +1,7 @@
 # novapilot_agents/DocumentationAgent/doc_generator.py
 import asyncio
 import uuid # For _get_project_context if included
+import os   # <--- ADD THIS LINE
 from typing import Optional, Any, Callable, Dict, List
 
 from novapilot_core.aci import AgentCommunicationInterface
@@ -109,7 +110,7 @@ class DocumentationAgent(AgentCommunicationInterface):
                 capability_id="generate_function_docstring",
                 task_type="documentation_generate_docstring",
                 description="Generates a docstring for a given function or method.",
-                keywords=["documentation", "docstring", "generate docs", "function", "method", "comment"],
+                keywords=["documentation", "docstring", "generate", "function", "method", "comment", "file", "docs", "doc", "string"],
                 required_input_keys=["file_path", "function_name", "code_block_lines"], # Example keys
                 generates_output_keys=["generated_docstring", "target_file_path"] # Example keys
             ),
@@ -117,7 +118,7 @@ class DocumentationAgent(AgentCommunicationInterface):
                 capability_id="generate_readme_section",
                 task_type="documentation_generate_readme",
                 description="Generates a section for a README.md file based on project details or specific features.",
-                keywords=["documentation", "readme", "generate docs", "project description", "feature summary"],
+                keywords=["documentation", "readme", "generate", "project", "description", "feature", "summary", "docs", "section"],
                 required_input_keys=["topic_description", "output_readme_path"], # Example keys
                 generates_output_keys=["generated_readme_section", "target_readme_path"]
             )
