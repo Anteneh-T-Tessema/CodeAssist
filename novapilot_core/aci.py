@@ -1,4 +1,4 @@
-# windsurf_core/aci.py
+# novapilot_core/aci.py # Corrected path in comment
 
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, List # Added List

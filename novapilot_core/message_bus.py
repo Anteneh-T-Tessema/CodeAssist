@@ -1,4 +1,4 @@
-# windsurf_core/message_bus.py
+# novapilot_core/message_bus.py # Corrected path in comment
 
 import asyncio
 from collections import defaultdict
@@ -113,6 +113,6 @@ async def main():
     print("Message bus example finished.")
 
 if __name__ == "__main__":
-    # To run this example: python -m windsurf_core.message_bus
-    # Ensure you are in the parent directory of windsurf_core
+    # To run this example: python -m novapilot_core.message_bus
+    # Ensure you are in the parent directory of novapilot_core
     asyncio.run(main())

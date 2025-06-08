@@ -1,6 +1,6 @@
 # UserInteractionOrchestratorAgent
 
-The `UserInteractionOrchestratorAgent` is responsible for managing the interaction between the user and the Windsurf agent ecosystem.
+The `UserInteractionOrchestratorAgent` is responsible for managing the interaction between the user and the NovaPilot agent ecosystem.
 
 ## Key Responsibilities:
 
@@ -17,5 +17,5 @@ The `UserInteractionOrchestratorAgent` is responsible for managing the interacti
 ## Current Implementation:
 
 -   The agent's logic resides in `orchestrator.py`.
--   It uses the global `message_bus` from `windsurf_core` for communication.
+-   It uses the global `message_bus` from `novapilot_core` for communication.
 -   Task routing is currently basic and may be expanded in the future.

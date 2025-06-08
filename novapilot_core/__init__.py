@@ -1,4 +1,4 @@
-# windsurf_core/__init__.py
+# novapilot_core/__init__.py # Corrected path in comment
 
 from .models import (
     Task, FileContext, CodeBlock, ExecutionResult, UserFeedback, AgentCapability,
