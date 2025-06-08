@@ -23,3 +23,15 @@ The core of the project is organized into the following agent modules, located i
 - **AgentSandboxAgent**: Provides a sandboxed environment for code execution and testing.
 
 Further details about each agent and their functionalities will be added as development progresses.
+
+## Core Communication Infrastructure (`windsurf_core`)
+
+To facilitate communication and data exchange between the various agents, a dedicated `windsurf_core` package has been established. This package contains the foundational elements for inter-agent interaction:
+
+-   **`windsurf_core/models.py`**: Defines the core data structures (Python dataclasses) used for communication. This includes `Task`, `FileContext`, `CodeBlock`, `ExecutionResult`, and `UserFeedback`, ensuring a standardized format for information passed between agents.
+
+-   **`windsurf_core/aci.py`**: (Agent Communication Interface) Contains the `AgentCommunicationInterface`, an abstract base class (ABC) that defines the standard methods and properties agents must implement for communication. This promotes consistency in how agents send/receive messages, handle tasks, and manage events.
+
+-   **`windsurf_core/message_bus.py`**: Implements a simple, in-memory `MessageBus`. This allows agents to communicate asynchronously using a publish-subscribe pattern. Agents can publish messages to specific channels (topics), and other agents can subscribe to these channels to receive relevant information, promoting loose coupling. A global instance `message_bus` is provided for ease of use in the current development phase.
+
+These core components are essential for enabling coordinated and effective collaboration among the specialized agents within the Windsurf ecosystem.
