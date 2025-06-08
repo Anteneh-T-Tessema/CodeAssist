@@ -201,6 +201,28 @@ async def main():
     if task_id_test3:
         print(f"[Main] Orchestrator accepted request (expected AT Agent, missing path), Task ID: {task_id_test3}")
 
+    # --- Test RefactoringAgent ---
+    print("\n--- Simulating User Requests for Refactoring Agent ---")
+
+    # Test case 1: Valid rename request
+    task_id_refactor1 = await orchestrator.receive_user_request(
+        request_text=f"refactor rename foo to bar in file {SAMPLE_FILE_NAME}"
+        # Orchestrator's test hook should parse this and populate task.data.
+        # SAMPLE_FILE_NAME is "sample_code.py" which should exist.
+    )
+    if task_id_refactor1:
+        print(f"[Main] Orchestrator accepted request (expected RefactoringAgent, valid), Task ID: {task_id_refactor1}")
+
+    # Test case 2: Rename request that will be missing parts for the test hook to parse fully,
+    # leading to missing keys for orchestrator validation against RefactoringAgent's capability.
+    task_id_refactor2 = await orchestrator.receive_user_request(
+        request_text="refactor rename old_widget"
+        # This is missing "to new_name" and "in file ..." structure.
+        # The hook will fail to parse, task.data won't have all required keys for 'refactor_rename_variable'.
+    )
+    if task_id_refactor2:
+        print(f"[Main] Orchestrator accepted request (expected RefactoringAgent, but to fail orchestrator validation), Task ID: {task_id_refactor2}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
@@ -212,7 +234,8 @@ async def main():
         task_id_cg_non_editable, task_id_cg_editable,
         task_id_completion1,
         task_id_debug1, task_id_debug2,
-        task_id_test1, task_id_test2, task_id_test3 # Added here
+        task_id_test1, task_id_test2, task_id_test3,
+        task_id_refactor1, task_id_refactor2 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:

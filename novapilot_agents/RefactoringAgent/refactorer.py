@@ -1,6 +1,7 @@
 # novapilot_agents/RefactoringAgent/refactorer.py
 import asyncio
-import uuid # Added for _get_project_context
+import uuid
+import os # For os.path.join and os.path.isabs
 from typing import Optional, Any, Callable, Dict, List
 
 from novapilot_core.aci import AgentCommunicationInterface
@@ -69,21 +70,61 @@ class RefactoringAgent(AgentCommunicationInterface):
 
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] Received Refactoring task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        output_message = f"Refactoring for '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "refactoring_summary": "No changes applied."}
+        # Inputs expected for "refactor_rename_variable" capability (based on its definition):
+        # required_input_keys=["file_path", "old_name", "new_name", "line_number_or_scope"]
+        original_file_path = task.data.get("file_path")
+        old_name = task.data.get("old_name")
+        new_name = task.data.get("new_name")
+        # line_number_or_scope = task.data.get("line_number_or_scope") # Not used in this basic impl, but expected
+
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
+        resolved_file_path = original_file_path
+
+        # Basic input validation for this specific task type simulation
+        if not all([original_file_path, old_name, new_name]):
+            status = "failed"
+            missing = []
+            if not original_file_path: missing.append("file_path")
+            if not old_name: missing.append("old_name")
+            if not new_name: missing.append("new_name")
+            output_message = f"Missing required data for rename: {', '.join(missing)}."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+        else:
+            project_ctx = await self._get_project_context()
+            if project_ctx and project_ctx.root_path:
+                if not os.path.isabs(original_file_path): # Requires import os
+                    resolved_file_path = os.path.join(project_ctx.root_path, original_file_path)
+                    print(f"[{self.agent_id}] Resolved relative path '{original_file_path}' to '{resolved_file_path}'.")
+            elif not project_ctx:
+                print(f"[{self.agent_id}] Warning: ProjectContext not available. Assuming '{original_file_path}' is absolute or accessible.")
+
+            result_data_content["file_path"] = resolved_file_path
+            result_data_content["old_name"] = old_name
+            result_data_content["new_name"] = new_name
+
+            # Simulate refactoring
+            output_message = f"Simulated renaming of '{old_name}' to '{new_name}' in file '{resolved_file_path}'. No actual changes made."
+            result_data_content["summary_of_changes"] = f"Simulated: Renamed variable '{old_name}' to '{new_name}'."
+            result_data_content["modified_files_list"] = [resolved_file_path] # Simulated
+            print(f"[{self.agent_id}] {output_message}")
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published refactoring result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
