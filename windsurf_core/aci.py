@@ -1,8 +1,8 @@
 # windsurf_core/aci.py
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
-from .models import Task, ExecutionResult # Assuming models.py is in the same directory
+from typing import Any, Callable, Optional, List # Added List
+from .models import Task, ExecutionResult, AgentCapability # Assuming models.py is in the same directory; Added AgentCapability
 
 class AgentCommunicationInterface(ABC):
     """
@@ -96,5 +96,12 @@ class AgentCommunicationInterface(ABC):
     def agent_id(self) -> str:
         """
         A unique identifier for this agent.
+        """
+        pass
+
+    @abstractmethod
+    async def get_capabilities(self) -> List[AgentCapability]:
+        """
+        Returns a list of capabilities this agent possesses.
         """
         pass

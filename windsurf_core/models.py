@@ -45,3 +45,12 @@ class UserFeedback:
     feedback_type: str # e.g., explicit_rating, implicit_correction, clarification
     content: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class AgentCapability:
+    capability_id: str # e.g., "generate_python_code", "analyze_python_file"
+    task_type: str # A more general type, e.g., "code_generation", "file_analysis", "testing"
+    description: str # Human-readable description of the capability
+    keywords: List[str] = field(default_factory=list) # Keywords to match against task descriptions
+    # Future fields could include: input_schema, output_schema, supported_languages, etc.
+    # For now, keeping it simple with keywords for matching.
