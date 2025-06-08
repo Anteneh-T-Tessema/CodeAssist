@@ -4,10 +4,15 @@ import os
 from novapilot_agents.UserInteractionOrchestratorAgent import UserInteractionOrchestratorAgent
 from novapilot_agents.CodeGenerationAgent import CodeGenerationAgent
 from novapilot_agents.CodeUnderstandingAgent import CodeUnderstandingAgent
+from novapilot_agents.CodeCompletionAgent import CodeCompletionAgent
+from novapilot_agents.DebuggingAgent import DebuggingAgent
+from novapilot_agents.AutomatedTestingAgent import AutomatedTestingAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
+SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
 
-async def create_sample_file_if_not_exists():
+async def create_sample_files(): # Renamed for clarity, or modify existing
+    # Create sample_code.py (existing logic)
     if not os.path.exists(SAMPLE_FILE_NAME):
         print(f"[Setup] Creating sample file: {SAMPLE_FILE_NAME}")
         with open(SAMPLE_FILE_NAME, "w", encoding="utf-8") as f:
@@ -22,12 +27,25 @@ async def create_sample_file_if_not_exists():
     else:
         print(f"[Setup] Sample file {SAMPLE_FILE_NAME} already exists.")
 
+    # Create sample_code_test.py
+    if not os.path.exists(SAMPLE_TEST_FILE_NAME):
+        print(f"[Setup] Creating sample test file: {SAMPLE_TEST_FILE_NAME}")
+        with open(SAMPLE_TEST_FILE_NAME, "w", encoding="utf-8") as f:
+            f.write("# A dummy test file for NovaPilot AutomatedTestingAgent\n")
+            f.write("def test_example_feature():\n")
+            f.write("    assert True\n")
+    else:
+        print(f"[Setup] Sample test file {SAMPLE_TEST_FILE_NAME} already exists.")
+
 async def main():
-    await create_sample_file_if_not_exists()
+    await create_sample_files() # New call
 
     orchestrator = UserInteractionOrchestratorAgent(agent_id="orchestrator_01")
     generator = CodeGenerationAgent(agent_id="codegen_agent_01")
     analyzer = CodeUnderstandingAgent(agent_id="code_understanding_agent_01")
+    completer = CodeCompletionAgent(agent_id="code_completion_agent_01")
+    debugger = DebuggingAgent(agent_id="debugging_agent_01")
+    tester = AutomatedTestingAgent(agent_id="automated_testing_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -36,6 +54,9 @@ async def main():
     orchestrator_listener_task = asyncio.create_task(orchestrator.start_listening())
     generator_listener_task = asyncio.create_task(generator.start_listening())
     analyzer_listener_task = asyncio.create_task(analyzer.start_listening())
+    completer_listener_task = asyncio.create_task(completer.start_listening())
+    debugger_listener_task = asyncio.create_task(debugger.start_listening())
+    tester_listener_task = asyncio.create_task(tester.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -117,6 +138,60 @@ async def main():
     if task_id_cg_editable:
         print(f"[Main] Orchestrator accepted request (expected CG Agent to proceed), Task ID: {task_id_cg_editable}")
 
+    # --- Test CodeCompletionAgent ---
+    print("\n--- Simulating User Request for Code Completion ---")
+    task_id_completion1 = await orchestrator.receive_user_request(
+        request_text="complete python def"
+        # Orchestrator's test hook should populate task.data for this.
+    )
+    if task_id_completion1:
+        print(f"[Main] Orchestrator accepted request (expected CodeCompletionAgent), Task ID: {task_id_completion1}")
+
+    # --- Test DebuggingAgent ---
+    print("\n--- Simulating User Requests for Debugging Agent ---")
+
+    # Test case 1: Debug existing file
+    task_id_debug1 = await orchestrator.receive_user_request(
+        request_text=f"debug file {SAMPLE_FILE_NAME}"
+        # Orchestrator's test hook should populate task.data.
+        # SAMPLE_FILE_NAME is "sample_code.py" which should exist.
+    )
+    if task_id_debug1:
+        print(f"[Main] Orchestrator accepted request (expected DebuggingAgent, file exists), Task ID: {task_id_debug1}")
+
+    # Test case 2: Debug non-existent file
+    DEBUG_NON_EXISTENT_FILE = "non_existent_debug_target.py"
+    task_id_debug2 = await orchestrator.receive_user_request(
+        request_text=f"debug file {DEBUG_NON_EXISTENT_FILE}"
+        # Orchestrator's test hook should populate task.data.
+    )
+    if task_id_debug2:
+        print(f"[Main] Orchestrator accepted request (expected DebuggingAgent, file not found), Task ID: {task_id_debug2}")
+
+    # --- Test AutomatedTestingAgent ---
+    print("\n--- Simulating User Requests for Automated Testing Agent ---")
+
+    # Test case 1: Run tests for a recognized _test.py file
+    task_id_test1 = await orchestrator.receive_user_request(
+        request_text=f"run tests for {SAMPLE_TEST_FILE_NAME}"
+    )
+    if task_id_test1:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, recognized test file), Task ID: {task_id_test1}")
+
+    # Test case 2: Run tests for a non-test file
+    task_id_test2 = await orchestrator.receive_user_request(
+        request_text=f"run tests for {SAMPLE_FILE_NAME}"
+    )
+    if task_id_test2:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, not a test file), Task ID: {task_id_test2}")
+
+    # Test case 3: Run tests with missing file path (should fail at agent or orchestrator validation if strict)
+    task_id_test3 = await orchestrator.receive_user_request(
+        request_text="run tests"
+    )
+    if task_id_test3:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, missing path), Task ID: {task_id_test3}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
@@ -125,7 +200,10 @@ async def main():
     tasks_to_check = [
         task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2,
         task_id_unroutable, task_id_invalid_input,
-        task_id_cg_non_editable, task_id_cg_editable  # Added new task IDs
+        task_id_cg_non_editable, task_id_cg_editable,
+        task_id_completion1,
+        task_id_debug1, task_id_debug2,
+        task_id_test1, task_id_test2, task_id_test3 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
@@ -143,6 +221,9 @@ async def main():
     await orchestrator.stop_listening()
     await generator.stop_listening()
     await analyzer.stop_listening()
+    await completer.stop_listening()
+    await debugger.stop_listening()
+    await tester.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -166,9 +247,12 @@ async def main():
     # However, the initial `asyncio.create_task` for agent listeners should also be awaited or gathered.
 
     await asyncio.gather(
-        orchestrator_listener_task, # This is for orchestrator's _listen_for_results and _listen_for_discovery_responses
-        generator_listener_task,    # This is for generator's combined listener setup in its start_listening
-        analyzer_listener_task,     # This is for analyzer's combined listener setup in its start_listening
+        orchestrator_listener_task,
+        generator_listener_task,
+        analyzer_listener_task,
+        completer_listener_task,
+        debugger_listener_task,
+        tester_listener_task,
         return_exceptions=True
     )
 

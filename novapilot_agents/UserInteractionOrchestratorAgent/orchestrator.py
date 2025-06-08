@@ -5,7 +5,7 @@ import os # For os.getcwd()
 from typing import Dict, Optional, Any, Callable, List
 
 from novapilot_core.aci import AgentCommunicationInterface
-from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext # Add ProjectContext
+from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext
 from novapilot_core.message_bus import message_bus
 
 class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
@@ -15,7 +15,13 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         self._active_tasks: Dict[str, Task] = {}
         self._task_results_queue: Optional[asyncio.Queue] = None
         self._agent_capabilities_registry: Dict[str, List[AgentCapability]] = {}
-        self._known_agent_ids: List[str] = ["codegen_agent_01", "code_understanding_agent_01"] # Example
+        self._known_agent_ids: List[str] = [
+            "codegen_agent_01",
+            "code_understanding_agent_01",
+            "code_completion_agent_01",
+            "debugging_agent_01",
+            "automated_testing_agent_01"
+        ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
         self._context_request_queue: Optional[asyncio.Queue] = None
@@ -36,13 +42,12 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     print(f"[{self.agent_id}] Received result for task {result.task_id}: Status='{result.status}', Output='{result.output}', Data='{result.data}'")
                     if result.task_id in self._active_tasks:
                         self._active_tasks[result.task_id].status = result.status
-                        # Potentially store the full result or notify other parts of the system
                     else:
                         print(f"[{self.agent_id}] Warning: Received result for unknown task ID {result.task_id}")
                 elif result == "stop_listening":
                     print(f"[{self.agent_id}] Stop signal received for results listener.")
                     break
-                self._task_results_queue.task_done() # Important for queue management if using join()
+                self._task_results_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in results listener: {e}")
         finally:
@@ -50,19 +55,14 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 await self._message_bus.unsubscribe(results_channel, self._task_results_queue)
             print(f"[{self.agent_id}] Unsubscribed and stopped listening for results.")
 
-    def _initialize_project_context(self): # This can be a synchronous method
-        # For now, create a simple ProjectContext.
-        # root_path will be the current working directory.
-        # In a real app, this might load from a config file or CLI args.
+    def _initialize_project_context(self):
         root_dir = os.getcwd()
-        project_id = str(uuid.uuid4()) # Generate a unique ID for this session/project
+        project_id = str(uuid.uuid4())
         project_name = os.path.basename(root_dir)
-
         self._project_context = ProjectContext(
             project_id=project_id,
             root_path=root_dir,
             project_name=project_name,
-            # main_language, vcs_type, etc., can be None or inferred later
         )
         print(f"[{self.agent_id}] Initialized ProjectContext: ID={project_id}, Name='{project_name}', Root='{root_dir}'")
 
@@ -81,15 +81,13 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                         if self._project_context:
                             await self._message_bus.publish(response_channel, self._project_context)
                         else:
-                            # Should not happen if _initialize_project_context is called in __init__
                             print(f"[{self.agent_id}] Error: ProjectContext not initialized when request received.")
-                            # Optionally publish an error response
                     else:
                         print(f"[{self.agent_id}] Received unknown message on context_requests: {message}")
                 elif message == "stop_listening_context":
                     print(f"[{self.agent_id}] Stop signal received for context_requests listener.")
                     break
-                if self._context_request_queue: # Check queue exists
+                if self._context_request_queue:
                     self._context_request_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in context_requests listener: {e}")
@@ -106,7 +104,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             while True:
                 response = await self._discovery_response_queue.get()
                 if isinstance(response, dict) and response.get("type") == "agent_capabilities_response":
-                    agent_id_resp = response.get("agent_id") # Renamed to avoid conflict
+                    agent_id_resp = response.get("agent_id")
                     capabilities_data = response.get("capabilities")
                     if agent_id_resp and capabilities_data:
                         if isinstance(capabilities_data, list) and all(isinstance(cap, AgentCapability) for cap in capabilities_data):
@@ -119,7 +117,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     break
                 else:
                     print(f"[{self.agent_id}] Received malformed/unexpected message on discovery response channel: {response}")
-                if self._discovery_response_queue: # Check queue exists
+                if self._discovery_response_queue:
                     self._discovery_response_queue.task_done()
         except Exception as e:
             print(f"[{self.agent_id}] Error in discovery responses listener: {e}")
@@ -173,7 +171,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         request_keywords = set(request_text.lower().split())
 
         best_match_agent_id = None
-        best_matched_capability: Optional[AgentCapability] = None # Store the capability object
+        best_matched_capability: Optional[AgentCapability] = None
         highest_score = 0
 
         if not self._agent_capabilities_registry:
@@ -204,7 +202,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             assigned_task_type = best_matched_capability.task_type
             print(f"[{self.agent_id}] Smart routing: Target={target_agent_id}, Capability='{best_matched_capability.description}' (Type: {assigned_task_type}), Score={highest_score} for request: '{request_text}'")
 
-            # --- Temporary Test Data Injection for 'editable' check ---
+            # --- Temporary Test Data Injection ---
             if target_agent_id == "codegen_agent_01" and best_matched_capability:
                 if "save to temp/test_non_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_non_editable.py"
@@ -218,12 +216,45 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     task_data["description"] = request_text
                     print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=True, path, and data.description for {task_data['target_file_path']}")
 
-            if assigned_task_type == "file_analysis_line_count":
-                if "file_path" not in task_data:
-                    potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
-                    if potential_paths:
-                        task_data["file_path"] = potential_paths[0]
-                        print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
+            elif "complete python def" in request_text.lower() and target_agent_id == "code_completion_agent_01":
+                task_data["code_context"] = "def "
+                task_data["cursor_position"] = 4
+                task_data["file_path"] = "dummy.py"
+                if "description" not in task_data: task_data["description"] = request_text
+                print(f"[{self.agent_id}] Test hook: Populated task_data for CodeCompletionAgent 'def' test.")
+
+            elif "debug file " in request_text.lower() and target_agent_id == "debugging_agent_01":
+                parts = request_text.split("debug file ", 1)
+                if len(parts) > 1:
+                    potential_file_path = parts[1].strip()
+                    task_data["file_path"] = potential_file_path
+                    task_data["code_block_id_or_lines"] = "N/A"
+                    task_data["execution_parameters"] = {}
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for DebuggingAgent test for file '{potential_file_path}'.")
+                else:
+                    print(f"[{self.agent_id}] Test hook: 'debug file' detected but could not extract file path from '{request_text}'.")
+
+            elif "run tests for " in request_text.lower() and target_agent_id == "automated_testing_agent_01":
+                parts = request_text.lower().split("run tests for ", 1)
+                if len(parts) > 1:
+                    original_parts = request_text.split("run tests for ", 1)
+                    potential_file_path_or_module = original_parts[1].strip()
+                    task_data["file_path_or_module"] = potential_file_path_or_module
+                    task_data["test_suite_name"] = "all"
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for AutomatedTestingAgent test for '{potential_file_path_or_module}'.")
+                else:
+                    print(f"[{self.agent_id}] Test hook: 'run tests for' detected for AutomatedTestingAgent, but could not extract file/module from '{request_text}'.")
+
+            # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
+            if assigned_task_type == "file_analysis_line_count" and "file_path" not in task_data:
+                potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
+                if potential_paths:
+                    task_data["file_path"] = potential_paths[0]
+                    print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
 
             # --- Input Validation Logic ---
             missing_keys = []
@@ -279,9 +310,13 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         if not task.target_agent_id:
             print(f"[{self.agent_id}] Task {task.task_id} has no target_agent_id. Cannot post.")
             return False
+        # Updated channel_map
         channel_map = {
             "codegen_agent_01": "code_generation_tasks",
-            "code_understanding_agent_01": "code_understanding_tasks"
+            "code_understanding_agent_01": "code_understanding_tasks",
+            "code_completion_agent_01": "code_completion_tasks",
+            "debugging_agent_01": "debugging_tasks",
+            "automated_testing_agent_01": "automated_testing_tasks"
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:
