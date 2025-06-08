@@ -1,71 +1,129 @@
-# novapilot_agents/CodeUnderstandingAgent/code_analyzer.py # Corrected path in comment
+# novapilot_agents/CodeUnderstandingAgent/code_analyzer.py
 import asyncio
-from typing import Optional, Any, Callable, Dict, List # Ensure List is here
-from novapilot_core.aci import AgentCommunicationInterface # Corrected import
-from novapilot_core.models import Task, ExecutionResult, AgentCapability # Corrected import
-from novapilot_core.message_bus import message_bus # Corrected import
+import os # For os.path.join and os.path.isabs
+import uuid # For generating unique response channel IDs
+from typing import Optional, Any, Callable, Dict, List
+from novapilot_core.aci import AgentCommunicationInterface
+from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext # Add ProjectContext
+from novapilot_core.message_bus import message_bus
 
 class CodeUnderstandingAgent(AgentCommunicationInterface):
     def __init__(self, agent_id: str):
         self._agent_id = agent_id
         self._message_bus = message_bus
         self._task_queue: Optional[asyncio.Queue] = None
+        self._project_context_cache: Optional[ProjectContext] = None
 
     @property
     def agent_id(self) -> str:
         return self._agent_id
 
+    async def _get_project_context(self) -> Optional[ProjectContext]:
+        if self._project_context_cache:
+            return self._project_context_cache
+
+        request_id = str(uuid.uuid4())
+        response_channel = f"agent_context_response_{self.agent_id}_{request_id}"
+
+        context_response_queue = None
+        try:
+            context_response_queue = await self._message_bus.subscribe(response_channel)
+
+            request_message = {
+                "type": "get_project_context",
+                "response_channel": response_channel
+            }
+            print(f"[{self.agent_id}] Requesting ProjectContext on 'context_requests'. Expecting response on '{response_channel}'.")
+            await self._message_bus.publish("context_requests", request_message)
+
+            # Wait for the response with a timeout
+            try:
+                # Using asyncio.wait_for to handle potential timeouts
+                project_context_response = await asyncio.wait_for(context_response_queue.get(), timeout=5.0) # 5s timeout
+                if isinstance(project_context_response, ProjectContext):
+                    self._project_context_cache = project_context_response
+                    print(f"[{self.agent_id}] Received and cached ProjectContext: {self._project_context_cache.project_id}")
+                    return self._project_context_cache
+                else:
+                    print(f"[{self.agent_id}] Received unexpected response type for ProjectContext: {type(project_context_response)}")
+                    return None
+            except asyncio.TimeoutError:
+                print(f"[{self.agent_id}] Timed out waiting for ProjectContext response on '{response_channel}'.")
+                return None
+            finally:
+                # Unsubscribe from the temporary response channel
+                if context_response_queue: # Check if it was successfully created
+                    await self._message_bus.unsubscribe(response_channel, context_response_queue)
+                    print(f"[{self.agent_id}] Unsubscribed from temporary context response channel '{response_channel}'.")
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error during _get_project_context: {e}")
+            # Ensure unsubscription if an error occurred before timeout block's finally
+            if context_response_queue and response_channel: # Check again before unsubscribing
+                 try:
+                     await self._message_bus.unsubscribe(response_channel, context_response_queue)
+                     print(f"[{self.agent_id}] Unsubscribed from temporary context response channel '{response_channel}' due to exception.")
+                 except Exception as unsub_e:
+                     print(f"[{self.agent_id}] Error unsubscribing from '{response_channel}': {unsub_e}")
+            return None
+
     async def _process_task(self, task: Task):
         print(f"[{self.agent_id}] Received task: {task.description}")
-        file_path = task.data.get("file_path")
 
-        if not file_path:
+        project_context = await self._get_project_context()
+        original_file_path = task.data.get("file_path")
+        resolved_file_path = original_file_path # Default to original
+
+        if not original_file_path:
             error_message = "Task data missing 'file_path'."
             print(f"[{self.agent_id}] Task {task.task_id} failed: {error_message}")
             result_data = ExecutionResult(
-                task_id=task.task_id,
-                status="failed",
-                output=error_message,
-                error_message=error_message
+                task_id=task.task_id, status="failed", output=error_message, error_message=error_message
             )
         else:
-            print(f"[{self.agent_id}] Processing file reading for: {file_path}")
+            if project_context and project_context.root_path:
+                if not os.path.isabs(original_file_path):
+                    resolved_file_path = os.path.join(project_context.root_path, original_file_path)
+                    print(f"[{self.agent_id}] Resolved relative path '{original_file_path}' to '{resolved_file_path}' using ProjectContext root '{project_context.root_path}'.")
+                # If original_file_path is already absolute, resolved_file_path remains original_file_path (now absolute)
+            elif not project_context:
+                 print(f"[{self.agent_id}] Warning: ProjectContext not available. Assuming '{original_file_path}' is absolute or accessible directly.")
+            # If project_context is available but no root_path (should not happen with current init), treat as no context.
+
+            print(f"[{self.agent_id}] Processing file reading for: {resolved_file_path}")
             try:
-                # In a real scenario, file access should be carefully sandboxed
-                # or restricted, especially if file_path can be arbitrary.
-                # For this example, we assume direct access is permissible.
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(resolved_file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    lines = content.splitlines() # More accurate than counting '\n'
+                    lines = content.splitlines()
                     line_count = len(lines)
 
-                output_message = f"Successfully read file: {file_path}. Line count: {line_count}."
+                output_message = f"Successfully read file: {resolved_file_path}. Line count: {line_count}."
                 print(f"[{self.agent_id}] {output_message}")
                 result_data = ExecutionResult(
                     task_id=task.task_id,
                     status="completed",
                     output=output_message,
-                    data={"file_path": file_path, "line_count": line_count}
+                    data={"file_path": resolved_file_path, "original_file_path": original_file_path, "line_count": line_count}
                 )
             except FileNotFoundError:
-                error_message = f"File not found: {file_path}"
+                error_message = f"File not found: {resolved_file_path}"
                 print(f"[{self.agent_id}] Task {task.task_id} failed: {error_message}")
                 result_data = ExecutionResult(
                     task_id=task.task_id,
                     status="failed",
                     output=error_message,
                     error_message=error_message,
-                    data={"file_path": file_path}
+                    data={"file_path": resolved_file_path, "original_file_path": original_file_path}
                 )
             except Exception as e:
-                error_message = f"An error occurred while reading file {file_path}: {str(e)}"
+                error_message = f"An error occurred while reading file {resolved_file_path}: {str(e)}"
                 print(f"[{self.agent_id}] Task {task.task_id} failed: {error_message}")
                 result_data = ExecutionResult(
                     task_id=task.task_id,
                     status="failed",
                     output=error_message,
                     error_message=error_message,
-                    data={"file_path": file_path}
+                    data={"file_path": resolved_file_path, "original_file_path": original_file_path}
                 )
 
         if task.source_agent_id:

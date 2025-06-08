@@ -57,12 +57,14 @@ async def main():
     if task_id_cg1:
         print(f"[Main] Orchestrator accepted request (expected CG Agent), Task ID: {task_id_cg1}")
 
-    # Request that should route to CodeUnderstandingAgent
+    # --- Code Understanding Request ---
+    print("\n--- Simulating Code Understanding User Request ---")
+    # Request for existing sample file using relative path
     task_id_cu1 = await orchestrator.receive_user_request(
-        request_text=f"Can you read file {SAMPLE_FILE_NAME} and count lines?"
+        request_text=f"analyze file {SAMPLE_FILE_NAME}" # SAMPLE_FILE_NAME is "sample_code.py"
     )
     if task_id_cu1:
-        print(f"[Main] Orchestrator accepted request (expected CU Agent), Task ID: {task_id_cu1}")
+        print(f"[Main] Orchestrator accepted analysis request for '{SAMPLE_FILE_NAME}', Task ID: {task_id_cu1}")
 
     # Request that should route to CodeGenerationAgent (sum function)
     task_id_cg2 = await orchestrator.receive_user_request(
@@ -71,12 +73,12 @@ async def main():
     if task_id_cg2:
         print(f"[Main] Orchestrator accepted request (expected CG Agent), Task ID: {task_id_cg2}")
 
-    # Request for a non-existent file, should still route to CodeUnderstandingAgent
+    # Request for a non-existent file using relative path
     task_id_cu2 = await orchestrator.receive_user_request(
-        request_text="analyze file non_existent_file.py please"
+        request_text="analyze file non_existent_relative.py" # Using a new name for clarity
     )
     if task_id_cu2:
-        print(f"[Main] Orchestrator accepted request (expected CU Agent, file not found), Task ID: {task_id_cu2}")
+        print(f"[Main] Orchestrator accepted analysis request for 'non_existent_relative.py' (expected fail), Task ID: {task_id_cu2}")
 
     # Request that should be unroutable
     task_id_unroutable = await orchestrator.receive_user_request(
@@ -85,12 +87,23 @@ async def main():
     if task_id_unroutable: # Will still get a task_id, but task status should be 'unroutable'
         print(f"[Main] Orchestrator accepted request (expected Unroutable), Task ID: {task_id_unroutable}")
 
+    # --- Test Input Validation Failure ---
+    print("\n--- Simulating User Request for Input Validation Failure ---")
+    # This request should match CodeUnderstandingAgent's capability by keywords,
+    # but will fail validation because "file_path" is missing and cannot be easily extracted.
+    task_id_invalid_input = await orchestrator.receive_user_request(
+        request_text="analyze the lines of my text", # No filename-like string
+        task_data={} # Explicitly empty task_data
+    )
+    if task_id_invalid_input:
+        print(f"[Main] Orchestrator accepted request (expected Input Validation Fail), Task ID: {task_id_invalid_input}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
     print("\n--- Checking Task Statuses in Orchestrator ---")
-    tasks_to_check = [task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2, task_id_unroutable]
+    tasks_to_check = [task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2, task_id_unroutable, task_id_invalid_input]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
             task_info = orchestrator._active_tasks[task_id]
