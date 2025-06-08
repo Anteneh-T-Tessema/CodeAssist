@@ -20,7 +20,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "code_understanding_agent_01",
             "code_completion_agent_01",
             "debugging_agent_01",
-            "automated_testing_agent_01"
+            "automated_testing_agent_01",
+            "refactoring_agent_01",    # New
+            "documentation_agent_01",  # New
+            "version_control_agent_01" # New
         ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
@@ -316,7 +319,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "code_understanding_agent_01": "code_understanding_tasks",
             "code_completion_agent_01": "code_completion_tasks",
             "debugging_agent_01": "debugging_tasks",
-            "automated_testing_agent_01": "automated_testing_tasks"
+            "automated_testing_agent_01": "automated_testing_tasks",
+            "refactoring_agent_01": "refactoring_tasks",          # New
+            "documentation_agent_01": "documentation_tasks",    # New
+            "version_control_agent_01": "version_control_tasks" # New
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:
