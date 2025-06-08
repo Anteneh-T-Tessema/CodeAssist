@@ -1,9 +1,9 @@
 # run_example_interaction.py
 import asyncio
 import os
-from windsurf_agents.UserInteractionOrchestratorAgent import UserInteractionOrchestratorAgent
-from windsurf_agents.CodeGenerationAgent import CodeGenerationAgent
-from windsurf_agents.CodeUnderstandingAgent import CodeUnderstandingAgent
+from novapilot_agents.UserInteractionOrchestratorAgent import UserInteractionOrchestratorAgent
+from novapilot_agents.CodeGenerationAgent import CodeGenerationAgent
+from novapilot_agents.CodeUnderstandingAgent import CodeUnderstandingAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 

@@ -1,9 +1,9 @@
-# windsurf_agents/CodeUnderstandingAgent/code_analyzer.py
+# novapilot_agents/CodeUnderstandingAgent/code_analyzer.py # Corrected path in comment
 import asyncio
 from typing import Optional, Any, Callable, Dict, List # Ensure List is here
-from windsurf_core.aci import AgentCommunicationInterface
-from windsurf_core.models import Task, ExecutionResult, AgentCapability # Add AgentCapability
-from windsurf_core.message_bus import message_bus
+from novapilot_core.aci import AgentCommunicationInterface # Corrected import
+from novapilot_core.models import Task, ExecutionResult, AgentCapability # Corrected import
+from novapilot_core.message_bus import message_bus # Corrected import
 
 class CodeUnderstandingAgent(AgentCommunicationInterface):
     def __init__(self, agent_id: str):

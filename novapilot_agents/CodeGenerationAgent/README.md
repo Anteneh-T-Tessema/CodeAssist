@@ -18,5 +18,5 @@ The `CodeGenerationAgent` is responsible for generating code snippets or entire 
 ## Current Implementation:
 
 -   The agent's logic resides in `generator.py`.
--   It uses the global `message_bus` from `windsurf_core` for communication.
+-   It uses the global `message_bus` from `novapilot_core` for communication.
 -   The code generation logic is currently a simple simulation and will be expanded for more complex scenarios.

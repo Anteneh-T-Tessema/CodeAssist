@@ -1,9 +1,9 @@
-# windsurf_agents/CodeGenerationAgent/generator.py
+# novapilot_agents/CodeGenerationAgent/generator.py # Corrected path in comment
 import asyncio
 from typing import Optional, Any, Callable, Dict, List # Ensure List is here
-from windsurf_core.aci import AgentCommunicationInterface
-from windsurf_core.models import Task, ExecutionResult, AgentCapability # Add AgentCapability
-from windsurf_core.message_bus import message_bus
+from novapilot_core.aci import AgentCommunicationInterface # Corrected import
+from novapilot_core.models import Task, ExecutionResult, AgentCapability # Corrected import
+from novapilot_core.message_bus import message_bus # Corrected import
 
 class CodeGenerationAgent(AgentCommunicationInterface):
     def __init__(self, agent_id: str):
@@ -28,7 +28,7 @@ class CodeGenerationAgent(AgentCommunicationInterface):
         if "hello world function in python" in task.description.lower():
             generated_code = (
                 "def greet():\n"
-                "    print(\"Hello, Windsurf!\")\n"
+                "    print(\"Hello, NovaPilot!\")\n" # Changed here
                 "\n"
                 "greet()"
             )
@@ -191,7 +191,7 @@ class CodeGenerationAgent(AgentCommunicationInterface):
             AgentCapability(
                 capability_id="generate_python_hello_world",
                 task_type="code_generation_python_hello_world",
-                description="Generates a 'Hello, Windsurf!' Python function.",
+                description="Generates a 'Hello, NovaPilot!' Python function.", # Changed here
                 keywords=["hello", "world", "greet", "print", "simple"],
                 required_input_keys=[], # Description is enough, or can be implied by keywords
                 generates_output_keys=["generated_code_string"]
