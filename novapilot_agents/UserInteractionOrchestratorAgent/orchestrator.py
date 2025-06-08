@@ -21,9 +21,9 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "code_completion_agent_01",
             "debugging_agent_01",
             "automated_testing_agent_01",
-            "refactoring_agent_01",    # New
-            "documentation_agent_01",  # New
-            "version_control_agent_01" # New
+            "refactoring_agent_01",
+            "documentation_agent_01",
+            "version_control_agent_01"
         ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
@@ -252,6 +252,28 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 else:
                     print(f"[{self.agent_id}] Test hook: 'run tests for' detected for AutomatedTestingAgent, but could not extract file/module from '{request_text}'.")
 
+            elif "refactor rename " in request_text.lower() and target_agent_id == "refactoring_agent_01":
+                try:
+                    text_to_parse = request_text.lower()
+                    parts1 = text_to_parse.split("refactor rename ", 1)[1].split(" to ", 1)
+                    old_name_part = parts1[0].strip()
+                    parts2 = parts1[1].split(" in file ", 1)
+                    new_name_part = parts2[0].strip()
+                    original_request_parts = request_text.split(" in file ", 1)
+                    file_path_part = original_request_parts[1].strip()
+                    task_data["old_name"] = old_name_part
+                    task_data["new_name"] = new_name_part
+                    task_data["file_path"] = file_path_part
+                    task_data["line_number_or_scope"] = "all"
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for RefactoringAgent 'rename' test: "
+                          f"old='{old_name_part}', new='{new_name_part}', file='{file_path_part}'.")
+                except IndexError:
+                    print(f"[{self.agent_id}] Test hook: 'refactor rename' detected for RefactoringAgent, but failed to parse all parts from '{request_text}'.")
+                except Exception as e:
+                    print(f"[{self.agent_id}] Test hook: Error parsing 'refactor rename' request for RefactoringAgent '{request_text}': {e}")
+
             # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
             if assigned_task_type == "file_analysis_line_count" and "file_path" not in task_data:
                 potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
@@ -320,9 +342,9 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "code_completion_agent_01": "code_completion_tasks",
             "debugging_agent_01": "debugging_tasks",
             "automated_testing_agent_01": "automated_testing_tasks",
-            "refactoring_agent_01": "refactoring_tasks",          # New
-            "documentation_agent_01": "documentation_tasks",    # New
-            "version_control_agent_01": "version_control_tasks" # New
+            "refactoring_agent_01": "refactoring_tasks",
+            "documentation_agent_01": "documentation_tasks",
+            "version_control_agent_01": "version_control_tasks"
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:
