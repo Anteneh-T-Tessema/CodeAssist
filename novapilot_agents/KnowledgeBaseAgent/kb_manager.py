@@ -47,21 +47,83 @@ class KnowledgeBaseAgent(AgentCommunicationInterface):
         return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] Received KnowledgeBase task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        output_message = f"Knowledge base operation '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "query_result": "No data found."}
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
+
+        if task.task_type == "kb_query":
+            query_string = task.data.get("query_string")
+            # filters = task.data.get("filters") # Not used in this simulation
+
+            if not query_string:
+                status = "failed"
+                output_message = "Missing 'query_string' in task data for kb_query."
+                result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+            else:
+                # Simulate KB query
+                await asyncio.sleep(0.1) # Simulate query time
+                query_lower = query_string.lower()
+                results_list = []
+
+                if "hello" in query_lower or "novapilot" in query_lower:
+                    results_list.append({
+                        "document_id": "doc_sim_001",
+                        "content_snippet": "NovaPilot is an advanced AI-powered software development assistant (simulated).",
+                        "relevance_score": 0.95,
+                        "source_document": "internal_docs/novapilot_overview.md"
+                    })
+                    if "architecture" in query_lower: # Add another dummy result for more specific query
+                         results_list.append({
+                            "document_id": "doc_sim_002",
+                            "content_snippet": "NovaPilot uses a microservices architecture with a central orchestrator (simulated).",
+                            "relevance_score": 0.88,
+                            "source_document": "internal_docs/architecture_deep_dive.md"
+                        })
+                    output_message = f"Found {len(results_list)} simulated document(s) for query: '{query_string}'."
+                    print(f"[{self.agent_id}] {output_message}")
+                else:
+                    output_message = f"No simulated documents found for query: '{query_string}'."
+                    print(f"[{self.agent_id}] {output_message}")
+
+                result_data_content["query_results_list"] = results_list
+                result_data_content["relevance_scores"] = [res["relevance_score"] for res in results_list] # Example
+                result_data_content["source_documents"] = [res["source_document"] for res in results_list] # Example
+                result_data_content["query_string_processed"] = query_string
+
+        elif task.task_type == "kb_store":
+            # For now, just acknowledge and say not implemented for actual storage
+            status = "not_implemented" # Explicitly not_implemented
+            output_message = f"Storage operation for document_id '{task.data.get('document_id', 'N/A')}' not implemented yet."
+            result_data_content["status_message"] = "not_implemented"
+            result_data_content["storage_confirmation_id"] = None
+            result_data_content["indexing_status"] = "pending_implementation"
+            print(f"[{self.agent_id}] {output_message}")
+
+        else:
+            status = "failed" # Or "not_implemented" if we want to be more specific for unknown task types
+            output_message = f"Unknown task type '{task.task_type}' for KnowledgeBaseAgent."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
+        if status == "failed" and "error" not in result_data_content:
+            result_data_content["error"] = output_message
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status in ["failed", "not_implemented"] else None
+            # error_message if truly an error, or if not_implemented is also an error condition for caller
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published KnowledgeBase result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 

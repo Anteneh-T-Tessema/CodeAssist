@@ -24,9 +24,12 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "refactoring_agent_01",
             "documentation_agent_01",
             "version_control_agent_01",
-            "vulnerability_scan_agent_01",      # New
-            "environment_management_agent_01",  # New
-            "platform_integration_agent_01"     # New
+            "vulnerability_scan_agent_01",
+            "environment_management_agent_01",
+            "platform_integration_agent_01",
+            "knowledge_base_agent_01",
+            "agent_lifecycle_manager_agent_01",
+            "agent_sandbox_agent_01"
         ]
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
@@ -510,75 +513,38 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                          task_data["description"] = request_text
                     print(f"[{self.agent_id}] Test hook: No specific data injection for PlatformIntegration request '{request_text}', ensured description exists.")
 
-            elif target_agent_id == "platform_integration_agent_01":
-                task_data_populated_by_hook = False
-                # Hook for "notify_slack_channel"
-                if "notify slack" in request_text.lower() or "send slack" in request_text.lower():
-                    # Example: "notify slack #general Hello team!"
-                    # Example: "send slack message to #alerts Critical issue detected"
-                    try:
-                        text_to_parse = request_text.lower()
-                        channel_part = ""
-                        message_part = ""
+            # Add new elif for KnowledgeBaseAgent test (specifically for kb_query):
+            elif "query kb for " in request_text.lower() and target_agent_id == "knowledge_base_agent_01":
+                # Example: "query kb for novapilot architecture"
+                try:
+                    # Extract terms after "query kb for "
+                    # Use original request_text to preserve case for query_string
+                    query_terms_part = request_text.split("query kb for ", 1)[1].strip()
 
-                        if "notify slack " in text_to_parse:
-                            temp_str = request_text.split("notify slack ", 1)[1] # Original case from here
-                        elif "send slack message to " in text_to_parse:
-                            temp_str = request_text.split("send slack message to ", 1)[1]
-                        elif "send slack " in text_to_parse: # More generic
-                            temp_str = request_text.split("send slack ", 1)[1]
-                        else: # Could not find a clear start for parsing
-                            temp_str = ""
+                    task_data["query_string"] = query_terms_part
 
-                        if temp_str:
-                            # First word is usually channel, rest is message
-                            parts = temp_str.split(" ", 1)
-                            channel_part = parts[0].strip()
-                            if len(parts) > 1:
-                                message_part = parts[1].strip()
+                    # Populate other required keys for "kb_query_information" capability
+                    # Current capability: required_input_keys=["query_string", "filters"]
+                    task_data["filters"] = {} # Placeholder for now
 
-                            if channel_part and message_part:
-                                task_data["slack_channel_id"] = channel_part
-                                task_data["message_text"] = message_part
-                                # notification_type is optional in agent, default is "info"
-                                # Get it if "type XYZ" is present
-                                if " type " in text_to_parse:
-                                    type_val = text_to_parse.split(" type ", 1)[1].split(" ",1)[0].strip()
-                                    task_data["notification_type"] = type_val
-                                else:
-                                    task_data["notification_type"] = "info" # Default for hook
-                                task_data_populated_by_hook = True
-                            else: # Handle if parsing channel/message fails
-                                print(f"[{self.agent_id}] Test hook: Could not parse channel and message for Slack notification from '{request_text}'.")
-
-
-                    except Exception as e:
-                        print(f"[{self.agent_id}] Test hook: Error parsing Slack notification request '{request_text}': {e}")
-
-                # Add placeholder for GitHub PR hook if needed for a test later
-                # elif "github pr" in request_text.lower() or "pull request" in request_text.lower():
-                #     task_data["repository_url"] = "github.com/example/repo" # Placeholder
-                #     task_data["branch_name"] = "feature-branch" # Placeholder
-                #     task_data["pr_title"] = "New Feature PR (Simulated by Hook)" # Placeholder
-                #     task_data["pr_body"] = "Details about the new feature." # Placeholder
-                #     task_data["target_branch"] = "main" # Placeholder
-                #     task_data_populated_by_hook = True
-
-
-                if task_data_populated_by_hook:
-                    if "description" not in task_data:
+                    if "description" not in task_data: # Ensure description for orchestrator validation
                         task_data["description"] = request_text
-                    print(f"[{self.agent_id}] Test hook: Populated task_data for PlatformIntegrationAgent. Data: {task_data}")
-                else:
-                    if "description" not in task_data and target_agent_id == "platform_integration_agent_01":
-                         task_data["description"] = request_text
-                    print(f"[{self.agent_id}] Test hook: No specific data injection for PlatformIntegration request '{request_text}', ensured description exists.")
 
-            # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
-                potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
-                if potential_paths:
-                    task_data["file_path"] = potential_paths[0]
-                    print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for KnowledgeBaseAgent 'kb_query' test with query_string: '{query_terms_part}'.")
+                except IndexError:
+                    print(f"[{self.agent_id}] Test hook: 'query kb for ' detected for KnowledgeBaseAgent, but failed to parse query terms from '{request_text}'. Ensure format '... for QUERY_TERMS'.")
+                except Exception as e:
+                    print(f"[{self.agent_id}] Test hook: Error parsing 'query kb for ' request for KnowledgeBaseAgent '{request_text}': {e}")
+
+            # elif "store in kb " in request_text.lower() and target_agent_id == "knowledge_base_agent_01":
+            #    # Placeholder for kb_store test hook if needed later
+            #    # task_data["document_content"] = "..."
+            #    # task_data["document_id"] = "..."
+            #    # task_data["metadata_tags"] = []
+            #    # if "description" not in task_data: task_data["description"] = request_text
+            #    # print(f"[{self.agent_id}] Test hook: Populated task_data for KnowledgeBaseAgent 'kb_store' test.")
+            #    pass
+
 
             # --- Input Validation Logic ---
             missing_keys = []
@@ -644,9 +610,12 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "refactoring_agent_01": "refactoring_tasks",
             "documentation_agent_01": "documentation_tasks",
             "version_control_agent_01": "version_control_tasks",
-            "vulnerability_scan_agent_01": "vulnerability_scan_tasks",          # New
-            "environment_management_agent_01": "environment_management_tasks",    # New
-            "platform_integration_agent_01": "platform_integration_tasks"     # New
+            "vulnerability_scan_agent_01": "vulnerability_scan_tasks",
+            "environment_management_agent_01": "environment_management_tasks",
+            "platform_integration_agent_01": "platform_integration_tasks",
+            "knowledge_base_agent_01": "knowledge_base_tasks",
+            "agent_lifecycle_manager_agent_01": "agent_lifecycle_tasks",
+            "agent_sandbox_agent_01": "agent_sandbox_tasks"
         }
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:
