@@ -106,14 +106,14 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             while True:
                 response = await self._discovery_response_queue.get()
                 if isinstance(response, dict) and response.get("type") == "agent_capabilities_response":
-                    agent_id = response.get("agent_id")
+                    agent_id_resp = response.get("agent_id") # Renamed to avoid conflict
                     capabilities_data = response.get("capabilities")
-                    if agent_id and capabilities_data:
+                    if agent_id_resp and capabilities_data:
                         if isinstance(capabilities_data, list) and all(isinstance(cap, AgentCapability) for cap in capabilities_data):
-                            self._agent_capabilities_registry[agent_id] = capabilities_data
-                            print(f"[{self.agent_id}] Received and registered capabilities from {agent_id}: {len(capabilities_data)} capabilities.")
+                            self._agent_capabilities_registry[agent_id_resp] = capabilities_data
+                            print(f"[{self.agent_id}] Received and registered capabilities from {agent_id_resp}: {len(capabilities_data)} capabilities.")
                         else:
-                            print(f"[{self.agent_id}] Received capabilities_data from {agent_id} not in expected List[AgentCapability] format. Data: {capabilities_data}")
+                            print(f"[{self.agent_id}] Received capabilities_data from {agent_id_resp} not in expected List[AgentCapability] format. Data: {capabilities_data}")
                 elif response == "stop_listening_discovery":
                     print(f"[{self.agent_id}] Stop signal received for discovery responses listener.")
                     break
@@ -135,7 +135,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "response_channel": f"orchestrator_discovery_responses_{self.agent_id}"
         }
         self._agent_capabilities_registry.clear()
-        for agent_id_iter in self._known_agent_ids: # Changed agent_id to agent_id_iter to avoid conflict
+        for agent_id_iter in self._known_agent_ids:
             print(f"[{self.agent_id}] Requesting capabilities from potential agent {agent_id_iter} on 'system_discovery_channel'.")
             await self._message_bus.publish("system_discovery_channel", discovery_request)
         await asyncio.sleep(1.0)
@@ -173,14 +173,14 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         request_keywords = set(request_text.lower().split())
 
         best_match_agent_id = None
-        best_matched_capability: Optional[AgentCapability] = None
+        best_matched_capability: Optional[AgentCapability] = None # Store the capability object
         highest_score = 0
 
         if not self._agent_capabilities_registry:
             print(f"[{self.agent_id}] Warning: Agent capabilities registry is empty. Running discover_agents() first is recommended.")
 
-        for agent_id_iter_reg, capabilities_iter_reg in self._agent_capabilities_registry.items(): # Renamed loop vars
-            for capability_iter_reg in capabilities_iter_reg: # Renamed loop vars
+        for agent_id_iter_reg, capabilities_iter_reg in self._agent_capabilities_registry.items():
+            for capability_iter_reg in capabilities_iter_reg:
                 capability_keywords = set(k.lower() for k in capability_iter_reg.keywords)
                 common_keywords = request_keywords.intersection(capability_keywords)
                 score = len(common_keywords)
@@ -204,6 +204,20 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             assigned_task_type = best_matched_capability.task_type
             print(f"[{self.agent_id}] Smart routing: Target={target_agent_id}, Capability='{best_matched_capability.description}' (Type: {assigned_task_type}), Score={highest_score} for request: '{request_text}'")
 
+            # --- Temporary Test Data Injection for 'editable' check ---
+            if target_agent_id == "codegen_agent_01" and best_matched_capability:
+                if "save to temp/test_non_editable.py" in request_text.lower():
+                    task_data["target_file_path"] = "temp/test_non_editable.py"
+                    task_data["target_file_is_editable"] = False
+                    task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=False, path, and data.description for {task_data['target_file_path']}")
+
+                elif "save to temp/test_editable.py" in request_text.lower():
+                    task_data["target_file_path"] = "temp/test_editable.py"
+                    task_data["target_file_is_editable"] = True
+                    task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=True, path, and data.description for {task_data['target_file_path']}")
+
             if assigned_task_type == "file_analysis_line_count":
                 if "file_path" not in task_data:
                     potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
@@ -211,6 +225,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                         task_data["file_path"] = potential_paths[0]
                         print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
 
+            # --- Input Validation Logic ---
             missing_keys = []
             if best_matched_capability.required_input_keys:
                 for key in best_matched_capability.required_input_keys:
