@@ -7,6 +7,9 @@ from novapilot_agents.CodeUnderstandingAgent import CodeUnderstandingAgent
 from novapilot_agents.CodeCompletionAgent import CodeCompletionAgent
 from novapilot_agents.DebuggingAgent import DebuggingAgent
 from novapilot_agents.AutomatedTestingAgent import AutomatedTestingAgent
+from novapilot_agents.RefactoringAgent import RefactoringAgent
+from novapilot_agents.DocumentationAgent import DocumentationAgent
+from novapilot_agents.VersionControlAgent import VersionControlAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
@@ -46,6 +49,9 @@ async def main():
     completer = CodeCompletionAgent(agent_id="code_completion_agent_01")
     debugger = DebuggingAgent(agent_id="debugging_agent_01")
     tester = AutomatedTestingAgent(agent_id="automated_testing_agent_01")
+    refactorer = RefactoringAgent(agent_id="refactoring_agent_01")
+    documenter = DocumentationAgent(agent_id="documentation_agent_01")
+    vcs_handler = VersionControlAgent(agent_id="version_control_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -57,6 +63,9 @@ async def main():
     completer_listener_task = asyncio.create_task(completer.start_listening())
     debugger_listener_task = asyncio.create_task(debugger.start_listening())
     tester_listener_task = asyncio.create_task(tester.start_listening())
+    refactorer_listener_task = asyncio.create_task(refactorer.start_listening())
+    documenter_listener_task = asyncio.create_task(documenter.start_listening())
+    vcs_handler_listener_task = asyncio.create_task(vcs_handler.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -224,6 +233,9 @@ async def main():
     await completer.stop_listening()
     await debugger.stop_listening()
     await tester.stop_listening()
+    await refactorer.stop_listening()
+    await documenter.stop_listening()
+    await vcs_handler.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -253,6 +265,9 @@ async def main():
         completer_listener_task,
         debugger_listener_task,
         tester_listener_task,
+        refactorer_listener_task,   # New
+        documenter_listener_task, # New
+        vcs_handler_listener_task,  # New
         return_exceptions=True
     )
 
