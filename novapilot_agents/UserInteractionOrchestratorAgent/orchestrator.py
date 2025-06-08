@@ -510,6 +510,70 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                          task_data["description"] = request_text
                     print(f"[{self.agent_id}] Test hook: No specific data injection for PlatformIntegration request '{request_text}', ensured description exists.")
 
+            elif target_agent_id == "platform_integration_agent_01":
+                task_data_populated_by_hook = False
+                # Hook for "notify_slack_channel"
+                if "notify slack" in request_text.lower() or "send slack" in request_text.lower():
+                    # Example: "notify slack #general Hello team!"
+                    # Example: "send slack message to #alerts Critical issue detected"
+                    try:
+                        text_to_parse = request_text.lower()
+                        channel_part = ""
+                        message_part = ""
+
+                        if "notify slack " in text_to_parse:
+                            temp_str = request_text.split("notify slack ", 1)[1] # Original case from here
+                        elif "send slack message to " in text_to_parse:
+                            temp_str = request_text.split("send slack message to ", 1)[1]
+                        elif "send slack " in text_to_parse: # More generic
+                            temp_str = request_text.split("send slack ", 1)[1]
+                        else: # Could not find a clear start for parsing
+                            temp_str = ""
+
+                        if temp_str:
+                            # First word is usually channel, rest is message
+                            parts = temp_str.split(" ", 1)
+                            channel_part = parts[0].strip()
+                            if len(parts) > 1:
+                                message_part = parts[1].strip()
+
+                            if channel_part and message_part:
+                                task_data["slack_channel_id"] = channel_part
+                                task_data["message_text"] = message_part
+                                # notification_type is optional in agent, default is "info"
+                                # Get it if "type XYZ" is present
+                                if " type " in text_to_parse:
+                                    type_val = text_to_parse.split(" type ", 1)[1].split(" ",1)[0].strip()
+                                    task_data["notification_type"] = type_val
+                                else:
+                                    task_data["notification_type"] = "info" # Default for hook
+                                task_data_populated_by_hook = True
+                            else: # Handle if parsing channel/message fails
+                                print(f"[{self.agent_id}] Test hook: Could not parse channel and message for Slack notification from '{request_text}'.")
+
+
+                    except Exception as e:
+                        print(f"[{self.agent_id}] Test hook: Error parsing Slack notification request '{request_text}': {e}")
+
+                # Add placeholder for GitHub PR hook if needed for a test later
+                # elif "github pr" in request_text.lower() or "pull request" in request_text.lower():
+                #     task_data["repository_url"] = "github.com/example/repo" # Placeholder
+                #     task_data["branch_name"] = "feature-branch" # Placeholder
+                #     task_data["pr_title"] = "New Feature PR (Simulated by Hook)" # Placeholder
+                #     task_data["pr_body"] = "Details about the new feature." # Placeholder
+                #     task_data["target_branch"] = "main" # Placeholder
+                #     task_data_populated_by_hook = True
+
+
+                if task_data_populated_by_hook:
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for PlatformIntegrationAgent. Data: {task_data}")
+                else:
+                    if "description" not in task_data and target_agent_id == "platform_integration_agent_01":
+                         task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: No specific data injection for PlatformIntegration request '{request_text}', ensured description exists.")
+
             # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
                 potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
                 if potential_paths:

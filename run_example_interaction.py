@@ -13,6 +13,9 @@ from novapilot_agents.VersionControlAgent import VersionControlAgent
 from novapilot_agents.VulnerabilityScanAgent import VulnerabilityScanAgent
 from novapilot_agents.EnvironmentManagementAgent import EnvironmentManagementAgent
 from novapilot_agents.PlatformIntegrationAgent import PlatformIntegrationAgent
+from novapilot_agents.KnowledgeBaseAgent import KnowledgeBaseAgent
+from novapilot_agents.AgentLifecycleManagerAgent import AgentLifecycleManagerAgent
+from novapilot_agents.AgentSandboxAgent import AgentSandboxAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
@@ -59,6 +62,9 @@ async def main():
     vuln_scanner = VulnerabilityScanAgent(agent_id="vulnerability_scan_agent_01")
     env_manager = EnvironmentManagementAgent(agent_id="environment_management_agent_01")
     platform_integrator = PlatformIntegrationAgent(agent_id="platform_integration_agent_01")
+    kb_manager = KnowledgeBaseAgent(agent_id="knowledge_base_agent_01")
+    lifecycle_mgr = AgentLifecycleManagerAgent(agent_id="agent_lifecycle_manager_agent_01")
+    sandbox_mgr = AgentSandboxAgent(agent_id="agent_sandbox_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -76,6 +82,9 @@ async def main():
     vuln_scanner_listener_task = asyncio.create_task(vuln_scanner.start_listening())
     env_manager_listener_task = asyncio.create_task(env_manager.start_listening())
     platform_integrator_listener_task = asyncio.create_task(platform_integrator.start_listening())
+    kb_manager_listener_task = asyncio.create_task(kb_manager.start_listening())
+    lifecycle_mgr_listener_task = asyncio.create_task(lifecycle_mgr.start_listening())
+    sandbox_mgr_listener_task = asyncio.create_task(sandbox_mgr.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -384,6 +393,9 @@ async def main():
     await vuln_scanner.stop_listening()
     await env_manager.stop_listening()
     await platform_integrator.stop_listening()
+    await kb_manager.stop_listening()
+    await lifecycle_mgr.stop_listening()
+    await sandbox_mgr.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -416,9 +428,12 @@ async def main():
         refactorer_listener_task,   # New
         documenter_listener_task,
         vcs_handler_listener_task,
-        vuln_scanner_listener_task,         # New
-        env_manager_listener_task,        # New
-        platform_integrator_listener_task,  # New
+        vuln_scanner_listener_task,
+        env_manager_listener_task,
+        platform_integrator_listener_task,
+        kb_manager_listener_task,           # New
+        lifecycle_mgr_listener_task,      # New
+        sandbox_mgr_listener_task,          # New
         return_exceptions=True
     )
 
