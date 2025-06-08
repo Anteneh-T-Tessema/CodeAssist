@@ -70,3 +70,15 @@ class AgentCapability:
     required_input_keys: List[str] = field(default_factory=list) # New field
     generates_output_keys: List[str] = field(default_factory=list) # New field
     # Future fields could include: input_schema, output_schema, supported_languages, etc.
+
+@dataclass
+class ProjectContext:
+    project_id: str  # Unique identifier for the project instance/session
+    root_path: str   # Absolute path to the project's root directory
+    project_name: Optional[str] = None
+    main_language: Optional[str] = None # e.g., "python", "javascript"
+    vcs_type: Optional[str] = None      # e.g., "git", "svn", "mercurial"
+    vcs_branch: Optional[str] = None
+    vcs_commit_hash: Optional[str] = None
+    # Additional project-specific details can go here or in metadata
+    metadata: Dict[str, Any] = field(default_factory=dict)

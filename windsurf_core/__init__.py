@@ -1,6 +1,9 @@
 # windsurf_core/__init__.py
 
-from .models import Task, FileContext, CodeBlock, ExecutionResult, UserFeedback, AgentCapability # Add AgentCapability
+from .models import (
+    Task, FileContext, CodeBlock, ExecutionResult, UserFeedback, AgentCapability,
+    ProjectContext # Add ProjectContext
+)
 from .aci import AgentCommunicationInterface
 from .message_bus import MessageBus, message_bus
 
@@ -10,7 +13,8 @@ __all__ = [
     "CodeBlock",
     "ExecutionResult",
     "UserFeedback",
-    "AgentCapability", # Add AgentCapability
+    "AgentCapability",
+    "ProjectContext", # Add ProjectContext
     "AgentCommunicationInterface",
     "MessageBus",
     "message_bus", # Exporting the global instance
