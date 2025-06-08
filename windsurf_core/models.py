@@ -36,6 +36,7 @@ class ExecutionResult:
     output: Optional[str] = None
     error_message: Optional[str] = None
     artifacts: List[str] = field(default_factory=list) # Paths to generated files or artifacts
+    data: Optional[Dict[str, Any]] = None # Add new optional data field
 
 @dataclass
 class UserFeedback:

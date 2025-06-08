@@ -1,77 +1,110 @@
 # run_example_interaction.py
 import asyncio
+import os # For creating a dummy file path if needed
 from windsurf_agents.UserInteractionOrchestratorAgent import UserInteractionOrchestratorAgent
 from windsurf_agents.CodeGenerationAgent import CodeGenerationAgent
-# message_bus is not directly used here for sending stop signals to individual agents anymore,
-# as agents now have their own stop_listening methods which handle publishing the stop signal.
+from windsurf_agents.CodeUnderstandingAgent import CodeUnderstandingAgent # Import new agent
+
+# Define the sample file name globally or pass it around
+SAMPLE_FILE_NAME = "sample_code.py"
+
+async def create_sample_file_if_not_exists():
+    if not os.path.exists(SAMPLE_FILE_NAME):
+        print(f"[Setup] Creating sample file: {SAMPLE_FILE_NAME}")
+        with open(SAMPLE_FILE_NAME, "w", encoding="utf-8") as f:
+            f.write("def hello_sample():\n")
+            f.write("    print(\"Hello from sample_code.py!\")\n")
+            f.write("\n")
+            f.write("# This is a comment\n")
+            f.write("# And another one.\n")
+            f.write("\n")
+            f.write("class SampleClass:\n")
+            f.write("    pass\n")
+    else:
+        print(f"[Setup] Sample file {SAMPLE_FILE_NAME} already exists.")
+
 
 async def main():
+    await create_sample_file_if_not_exists()
+
     orchestrator = UserInteractionOrchestratorAgent(agent_id="orchestrator_01")
     generator = CodeGenerationAgent(agent_id="codegen_agent_01")
+    analyzer = CodeUnderstandingAgent(agent_id="code_understanding_agent_01") # Instantiate
 
-    print("--- Starting Enhanced Agent Interaction Example ---")
+    print("--- Starting Full Agent Interaction Example ---")
 
     # Start agents' listening loops
-    # These tasks will run in the background
     orchestrator_listener_task = asyncio.create_task(orchestrator.start_listening())
     generator_listener_task = asyncio.create_task(generator.start_listening())
+    analyzer_listener_task = asyncio.create_task(analyzer.start_listening()) # Start listener
 
-    # Give listeners a moment to subscribe
-    await asyncio.sleep(0.2) # Increased slightly to ensure subscriptions are processed
+    await asyncio.sleep(0.3) # Allow all listeners to subscribe
 
-    # Simulate a user request to the orchestrator
-    print("\n--- Simulating User Request ---")
-    task_id_1 = await orchestrator.receive_user_request(
+    # --- Code Generation Requests ---
+    print("\n--- Simulating Code Generation User Requests ---")
+    task_id_gen_1 = await orchestrator.receive_user_request(
         request_text="Create a Python function that prints 'Hello, Windsurf!'",
         target_agent_id="codegen_agent_01"
     )
-    if task_id_1:
-        print(f"[Main] Orchestrator accepted user request, Task ID: {task_id_1}")
+    if task_id_gen_1:
+        print(f"[Main] Orchestrator accepted codegen request, Task ID: {task_id_gen_1}")
 
-    # Simulate another user request for a different function
-    await asyncio.sleep(0.1) # Small delay between requests
-    task_id_2 = await orchestrator.receive_user_request(
-        request_text="Create a sum function",
-        target_agent_id="codegen_agent_01",
-        task_data={"details": "Generate a Python function that sums two numbers."}
-    )
-    if task_id_2:
-        print(f"[Main] Orchestrator accepted user request, Task ID: {task_id_2}")
-
-    # Simulate a user request that should fail
-    await asyncio.sleep(0.1)
-    task_id_3 = await orchestrator.receive_user_request(
-        request_text="Bake a cake", # This should be handled as a failed task by the generator
+    task_id_gen_2 = await orchestrator.receive_user_request(
+        request_text="Bake a cake", # This should fail at the generator
         target_agent_id="codegen_agent_01"
     )
-    if task_id_3:
-        print(f"[Main] Orchestrator accepted user request, Task ID: {task_id_3}")
+    if task_id_gen_2:
+        print(f"[Main] Orchestrator accepted codegen request (expected fail), Task ID: {task_id_gen_2}")
+
+    # --- Code Understanding Request ---
+    print("\n--- Simulating Code Understanding User Request ---")
+    task_id_analyze_1 = await orchestrator.receive_user_request(
+        request_text=f"analyze file {SAMPLE_FILE_NAME}"
+        # Target agent will be determined by orchestrator's logic
+    )
+    if task_id_analyze_1:
+        print(f"[Main] Orchestrator accepted analysis request, Task ID: {task_id_analyze_1}")
+
+    # Simulate a file not found scenario
+    task_id_analyze_2 = await orchestrator.receive_user_request(
+        request_text="analyze file non_existent_file.py"
+    )
+    if task_id_analyze_2:
+        print(f"[Main] Orchestrator accepted analysis request (expected fail), Task ID: {task_id_analyze_2}")
 
 
-    # Allow time for tasks to be processed and results to be received
-    print("\n--- Allowing time for task processing (approx 3 seconds) ---")
-    await asyncio.sleep(3) # Adjust as needed based on agent processing times
+    print("\n--- Allowing time for task processing (approx 4 seconds) ---")
+    await asyncio.sleep(4)
 
-    # Check status of tasks in orchestrator (optional demonstration)
     print("\n--- Checking Task Statuses in Orchestrator ---")
-    if task_id_1 and task_id_1 in orchestrator._active_tasks:
-        print(f"[Main] Status of Task {task_id_1}: {orchestrator._active_tasks[task_id_1].status}")
-    if task_id_2 and task_id_2 in orchestrator._active_tasks:
-        print(f"[Main] Status of Task {task_id_2}: {orchestrator._active_tasks[task_id_2].status}")
-    if task_id_3 and task_id_3 in orchestrator._active_tasks:
-        print(f"[Main] Status of Task {task_id_3}: {orchestrator._active_tasks[task_id_3].status}")
+    tasks_to_check = [task_id_gen_1, task_id_gen_2, task_id_analyze_1, task_id_analyze_2]
+    for task_id in tasks_to_check:
+        if task_id and task_id in orchestrator._active_tasks:
+            task_info = orchestrator._active_tasks[task_id]
+            print(f"[Main] Status of Task {task_id} ({task_info.description}): {task_info.status}")
+            # Try to get final result details if available (and status implies result is processed)
+            if task_info.status in ["completed", "failed"]:
+                # The result itself isn't directly stored on the task object by default in the current orchestrator.
+                # The orchestrator prints results when they arrive in _listen_for_results.
+                # For more detailed result checking here, orchestrator would need to store them.
+                pass
 
 
-    # Gracefully stop agents' listening loops
     print("\n--- Sending Stop Signals to Agents ---")
     await orchestrator.stop_listening()
     await generator.stop_listening()
+    await analyzer.stop_listening() # Stop analyzer
 
-    # Wait for listener tasks to complete
     print("\n--- Waiting for Agent Listeners to Finish ---")
-    await asyncio.gather(orchestrator_listener_task, generator_listener_task, return_exceptions=True)
+    await asyncio.gather(
+        orchestrator_listener_task,
+        generator_listener_task,
+        analyzer_listener_task, # Gather analyzer task
+        return_exceptions=True
+    )
 
-    print("\n--- Enhanced Agent Interaction Example Finished ---")
+    print("\n--- Full Agent Interaction Example Finished ---")
 
 if __name__ == "__main__":
+    # The sample file is created at the start of main()
     asyncio.run(main())

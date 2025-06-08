@@ -53,29 +53,49 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         await self._message_bus.publish(results_channel, "stop_listening")
 
 
-    async def receive_user_request(self, request_text: str, target_agent_id: str = "codegen_agent_01", task_data: Optional[Dict[str, Any]] = None):
+    async def receive_user_request(self, request_text: str, target_agent_id: Optional[str] = None, task_data: Optional[Dict[str, Any]] = None):
         task_id = str(uuid.uuid4())
         if task_data is None:
-            task_data = {"details": "Process user request"}
+            task_data = {} # Initialize if None
+
+        # Simple keyword-based routing for demonstration
+        # In a real system, this would use more sophisticated NLP or command parsing.
+        actual_target_agent_id = target_agent_id
+        task_description = request_text
+
+        if request_text.lower().startswith("read file ") or request_text.lower().startswith("analyze file "):
+            parts = request_text.split(" ", 2)
+            if len(parts) > 2:
+                file_path = parts[2]
+                task_data["file_path"] = file_path
+                actual_target_agent_id = "code_understanding_agent_01"
+                task_description = f"Analyze file: {file_path}" # Standardize description
+                print(f"[{self.agent_id}] Identified file analysis request for: {file_path}")
+            else:
+                print(f"[{self.agent_id}] File analysis request received, but file path seems missing: {request_text}")
+                # Let it proceed, it might be a generic task or fail at the target
+        elif target_agent_id is None: # Default to codegen if no specific target and not a file read
+            actual_target_agent_id = "codegen_agent_01"
+
+
+        if actual_target_agent_id is None:
+            print(f"[{self.agent_id}] Could not determine target agent for request: {request_text}")
+            # Optionally create a failed task here or return None
+            return None
+
 
         task = Task(
             task_id=task_id,
-            description=request_text,
+            description=task_description,
             source_agent_id=self.agent_id,
-            target_agent_id=target_agent_id, # Example: route to code generator
+            target_agent_id=actual_target_agent_id,
             data=task_data,
             status="pending_dispatch"
         )
         self._active_tasks[task_id] = task
-        print(f"[{self.agent_id}] New user request. Task created: {task_id} - {task.description}")
+        print(f"[{self.agent_id}] New task created: {task_id} for agent {actual_target_agent_id} - {task.description}")
 
-        # For now, directly dispatching to a known channel for the target agent
-        # In future, this could involve more sophisticated routing or agent discovery
-        if target_agent_id == "codegen_agent_01":
-            await self.post_task(task) # Use the post_task method
-        else:
-            print(f"[{self.agent_id}] No route for target agent: {target_agent_id}")
-            task.status = "dispatch_failed"
+        await self.post_task(task)
         return task_id
 
     # --- ACI Implementation ---
@@ -99,7 +119,8 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         # Determine the channel based on the target agent or task type
         # This is a simplified routing mechanism.
         channel_map = {
-            "codegen_agent_01": "code_generation_tasks"
+            "codegen_agent_01": "code_generation_tasks",
+            "code_understanding_agent_01": "code_understanding_tasks" # New entry
             # Add other agent_id to channel mappings here
         }
 
