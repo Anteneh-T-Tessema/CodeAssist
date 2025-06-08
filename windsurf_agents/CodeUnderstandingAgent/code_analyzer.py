@@ -168,8 +168,10 @@ class CodeUnderstandingAgent(AgentCommunicationInterface):
         return [
             AgentCapability(
                 capability_id="analyze_file_line_count",
-                task_type="file_analysis",
+                task_type="file_analysis_line_count", # Made task_type more specific
                 description="Reads a specified file and counts the number of lines.",
-                keywords=["read", "file", "analyze", "count", "lines", "length"] # Atomized
+                keywords=["read", "analyze", "file", "count", "lines", "length"],
+                required_input_keys=["file_path"], # Explicitly requires 'file_path' in Task.data
+                generates_output_keys=["line_count", "file_path"] # Output keys in ExecutionResult.data
             )
         ]

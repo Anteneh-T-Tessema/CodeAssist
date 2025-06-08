@@ -43,12 +43,22 @@ class CodeGenerationAgent(AgentCommunicationInterface):
             print(f"[{self.agent_id}] Task {task.task_id} failed: {error_message}")
 
 
+        current_data = {}
+        if status == "completed" and generated_code:
+            current_data["generated_code_string"] = generated_code # As advertised in generates_output_keys
+            output_summary = f"Successfully generated code for: {task.description}"
+        elif status == "failed":
+            output_summary = error_message
+        else: # Should not happen if logic is correct, but as a fallback
+            output_summary = "Processing finished with undefined state."
+
         result_data = ExecutionResult(
             task_id=task.task_id,
             status=status,
-            output=generated_code if generated_code else error_message, # Put code or error in output
+            output=output_summary, # Human-readable summary
             error_message=error_message if status == "failed" else None,
-            artifacts=[] # Could add file path if code was written to a file
+            data=current_data, # Store structured output here
+            artifacts=[]
         )
 
         # Publish result to the orchestrator's result channel
@@ -172,20 +182,26 @@ class CodeGenerationAgent(AgentCommunicationInterface):
         return [
             AgentCapability(
                 capability_id="generate_python_code_general",
-                task_type="code_generation",
+                task_type="code_generation_python", # Made task_type more specific
                 description="Generates Python code snippets based on natural language descriptions.",
-                keywords=["generate", "code", "create", "function", "python", "script", "write"] # Atomized
+                keywords=["generate", "code", "python", "script", "function", "class", "write"],
+                required_input_keys=["description"], # Expects general description in Task.description
+                generates_output_keys=["generated_code_string"]
             ),
             AgentCapability(
                 capability_id="generate_python_hello_world",
-                task_type="code_generation",
+                task_type="code_generation_python_hello_world",
                 description="Generates a 'Hello, Windsurf!' Python function.",
-                keywords=["hello", "world", "greet", "function", "simple", "print"] # Atomized
+                keywords=["hello", "world", "greet", "print", "simple"],
+                required_input_keys=[], # Description is enough, or can be implied by keywords
+                generates_output_keys=["generated_code_string"]
             ),
             AgentCapability(
                 capability_id="generate_python_sum_function",
-                task_type="code_generation",
+                task_type="code_generation_python_sum",
                 description="Generates a Python function to sum two numbers.",
-                keywords=["sum", "function", "add", "numbers", "calculator"] # Atomized
+                keywords=["sum", "add", "numbers", "calculator", "math"],
+                required_input_keys=[], # Description is enough
+                generates_output_keys=["generated_code_string"]
             )
         ]

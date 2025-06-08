@@ -12,6 +12,7 @@ class Task:
     data: Dict[str, Any] = field(default_factory=dict)
     status: str = "pending"  # e.g., pending, in_progress, completed, failed
     priority: int = 0 # Higher number means higher priority
+    task_type: Optional[str] = None # New field
 
 @dataclass
 class FileContext:
@@ -52,5 +53,6 @@ class AgentCapability:
     task_type: str # A more general type, e.g., "code_generation", "file_analysis", "testing"
     description: str # Human-readable description of the capability
     keywords: List[str] = field(default_factory=list) # Keywords to match against task descriptions
+    required_input_keys: List[str] = field(default_factory=list) # New field
+    generates_output_keys: List[str] = field(default_factory=list) # New field
     # Future fields could include: input_schema, output_schema, supported_languages, etc.
-    # For now, keeping it simple with keywords for matching.

@@ -29,7 +29,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             while True:
                 result = await self._task_results_queue.get()
                 if isinstance(result, ExecutionResult):
-                    print(f"[{self.agent_id}] Received result for task {result.task_id}: {result.status} - {result.output}")
+                    print(f"[{self.agent_id}] Received result for task {result.task_id}: Status='{result.status}', Output='{result.output}', Data='{result.data}'")
                     if result.task_id in self._active_tasks:
                         self._active_tasks[result.task_id].status = result.status
                         # Potentially store the full result or notify other parts of the system
@@ -138,100 +138,77 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             task_data = {}
 
         print(f"[{self.agent_id}] New user request received: '{request_text}'")
-
-        # Simple keyword extraction from request_text (lowercase, split by space)
         request_keywords = set(request_text.lower().split())
-        # In a more advanced system, use NLP for better keyword extraction & stop word removal.
 
         best_match_agent_id = None
+        best_matched_capability: Optional[AgentCapability] = None # Store the capability object
         highest_score = 0
-        best_capability_description = "" # For logging/debugging
 
         if not self._agent_capabilities_registry:
-            print(f"[{self.agent_id}] Warning: Agent capabilities registry is empty. Cannot perform smart routing. Consider running discover_agents().")
-            # Fallback or error handling if registry is empty. For now, we'll let it try to find a match (which will fail).
+            print(f"[{self.agent_id}] Warning: Agent capabilities registry is empty. Running discover_agents() first is recommended.")
 
         for agent_id, capabilities in self._agent_capabilities_registry.items():
             for capability in capabilities:
-                # Simple score: number of matching keywords
-                # Ensure capability.keywords are also lowercase for consistent matching, or handle case during registration.
-                # For now, assuming they are registered in a consistent case (e.g. lowercase) or we convert here.
                 capability_keywords = set(k.lower() for k in capability.keywords)
                 common_keywords = request_keywords.intersection(capability_keywords)
                 score = len(common_keywords)
 
-                # Basic tie-breaking: prefer more specific capabilities (more keywords defined)
-                # This is very rudimentary.
                 if score > highest_score:
                     highest_score = score
                     best_match_agent_id = agent_id
-                    best_capability_description = capability.description
-                elif score == highest_score and score > 0:
-                    # If scores are equal, prefer the one with more keywords in its definition (more specific)
-                    # This is a simplistic tie-breaker. Could also consider capability priority if added.
-                    current_best_keywords_len = 0
-                    for cap_list in self._agent_capabilities_registry.get(best_match_agent_id, []):
-                        if cap_list.description == best_capability_description: # find the current best capability
-                            current_best_keywords_len = len(cap_list.keywords)
-                            break
-
-                    if len(capability.keywords) > current_best_keywords_len:
+                    best_matched_capability = capability
+                elif score == highest_score and score > 0: # Check score > 0 to ensure best_matched_capability is not None
+                    if best_matched_capability and len(capability.keywords) > len(best_matched_capability.keywords):
                         best_match_agent_id = agent_id
-                        best_capability_description = capability.description
-
+                        best_matched_capability = capability
 
         target_agent_id = best_match_agent_id
         task_status = "pending_dispatch"
-        final_task_description = request_text # Use original request as description
+        final_task_description = request_text
+        assigned_task_type = None
 
-        if target_agent_id:
-            print(f"[{self.agent_id}] Smart routing determined target: {target_agent_id} (Capability: '{best_capability_description}' with score {highest_score}) for request: '{request_text}'")
-            # If the chosen capability implies specific data needs, update task_data here.
-            # For example, if it's a file analysis task, ensure file_path is extracted and put in task_data.
-            # This part needs to be coordinated with how capabilities define their data requirements.
-            # For now, we'll assume the CodeUnderstandingAgent's capability keywords are good enough
-            # and the orchestrator can still manually add file_path for such tasks if needed,
-            # or the task description itself contains the file path.
+        if target_agent_id and best_matched_capability:
+            assigned_task_type = best_matched_capability.task_type # Get task_type from the matched capability
+            print(f"[{self.agent_id}] Smart routing: Target={target_agent_id}, Capability='{best_matched_capability.description}' (Type: {assigned_task_type}), Score={highest_score} for request: '{request_text}'")
 
-            # Example: If routing to CodeUnderstandingAgent, ensure file_path is in task_data
-            # This is still a bit manual and could be improved by capabilities defining input data structure.
-            if target_agent_id == "code_understanding_agent_01":
-                # Attempt to extract file_path if not already in task_data
+            # Heuristic for file_path extraction for CodeUnderstandingAgent tasks
+            # This uses the specific task_type we defined for it.
+            if assigned_task_type == "file_analysis_line_count": # Matches task_type in CodeUnderstandingAgent
                 if "file_path" not in task_data:
-                    # A very basic way to get a file path if the request text contains it
-                    # e.g. "analyze file my_file.py"
                     words = request_text.lower().split()
-                    if "file" in words and words.index("file") + 1 < len(words):
-                        # Check if the word after "file" looks like a path/filename
-                        # Corrected index from +2 to +1
-                        potential_path = request_text.split()[words.index("file") + 1] # Get original case word
-                        # This is very naive, just for demonstration
-                        if "." in potential_path or "/" in potential_path or "\\" in potential_path:
-                             task_data["file_path"] = potential_path
-                             final_task_description = f"Analyze file: {potential_path}"
-
+                    try:
+                        # Try to find a word that looks like a filename/path in the request
+                        potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
+                        if potential_paths:
+                             task_data["file_path"] = potential_paths[0] # Take the first likely path
+                             # Standardize description only if path is found by this heuristic
+                             final_task_description = f"Analyze file: {task_data['file_path']}"
+                             print(f"[{self.agent_id}] Extracted file_path for analysis: {task_data['file_path']}")
+                        else:
+                            print(f"[{self.agent_id}] Could not extract file_path for task type {assigned_task_type} from request: '{request_text}'")
+                    except ValueError:
+                        pass
 
         else:
             task_status = "unroutable"
-            print(f"[{self.agent_id}] Could not find a suitable agent for request: '{request_text}'. Marked as unroutable.")
-            # No target_agent_id, so post_task will fail or skip.
+            print(f"[{self.agent_id}] Could not find suitable agent for request: '{request_text}'. Marked unroutable.")
 
         task = Task(
             task_id=task_id,
-            description=final_task_description, # Use potentially modified description
+            description=final_task_description,
             source_agent_id=self.agent_id,
-            target_agent_id=target_agent_id, # This can be None if unroutable
+            target_agent_id=target_agent_id,
             data=task_data,
-            status=task_status
+            status=task_status,
+            task_type=assigned_task_type # Set the task_type here
         )
         self._active_tasks[task_id] = task
-        print(f"[{self.agent_id}] New task created: {task_id} for agent {target_agent_id if target_agent_id else 'N/A'} - {task.description}")
+        print(f"[{self.agent_id}] New task created: ID={task_id}, Type='{task.task_type}', Target='{target_agent_id if target_agent_id else 'N/A'}', Desc='{task.description}'")
 
         if task.status == "pending_dispatch" and task.target_agent_id:
             await self.post_task(task)
         elif not task.target_agent_id and task.status == "unroutable":
             print(f"[{self.agent_id}] Task {task.task_id} is unroutable and will not be posted.")
-            # Optionally, publish an event or log this unroutable task for monitoring
 
         return task_id
 

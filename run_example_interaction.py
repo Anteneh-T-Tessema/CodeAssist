@@ -94,7 +94,10 @@ async def main():
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
             task_info = orchestrator._active_tasks[task_id]
-            print(f"[Main] Status of Task {task_id} ('{task_info.description}'): {task_info.status}, Target: {task_info.target_agent_id}")
+            print(f"[Main] Task ID: {task_id}, Type: '{task_info.task_type}', Target: '{task_info.target_agent_id}', Status: '{task_info.status}', Desc: '{task_info.description}'")
+            # Note: The actual ExecutionResult.data is logged by the orchestrator's _listen_for_results.
+            # Accessing it here would require the orchestrator to store it on the task_info or a separate registry.
+            # For now, we rely on the orchestrator's log for result.data details.
 
 
     print("\n--- Sending Stop Signals to Agents ---")
