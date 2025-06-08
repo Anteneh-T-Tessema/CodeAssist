@@ -29,28 +29,45 @@ class CodeCompletionAgent(AgentCommunicationInterface):
         return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        # Simulate processing
-        await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] Received CodeCompletion task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        output_message = f"Code completion for '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented"}
+        code_context = str(task.data.get("code_context", "")).lower() # Ensure lowercase for matching
+        # file_path = task.data.get("file_path") # For future use
+        # cursor_position = task.data.get("cursor_position") # For future use
 
-        # Example: If it were to provide completions
-        # if task.task_type == "code_completion_provide_suggestions":
-        #     completions = ["suggestion1", "suggestion2"]
+        completions = []
+        status = "completed" # Assume task completes, even if no suggestions
+        output_message = "No specific completion trigger found in code_context."
+        result_data_content = {"completions_list": []}
+
+        if "def " in code_context: # Check for "def " (with a space)
+            completions = [
+                "def function_name(params):",
+                "    pass",
+                "    return None"
+            ]
+            output_message = "Provided basic Python function definition snippets."
+            result_data_content["completions_list"] = completions
+            print(f"[{self.agent_id}] 'def ' detected. Providing function snippets.")
+
+        # Add more elif blocks here for other simple triggers if desired in future.
+        # elif "class " in code_context:
+        #     completions = ["class ClassName:", "    def __init__(self):", "        pass"]
+        #     output_message = "Provided basic Python class definition snippets."
         #     result_data_content["completions_list"] = completions
-        #     output_message = f"Provided {len(completions)} completion suggestions."
+        #     print(f"[{self.agent_id}] 'class ' detected. Providing class snippets.")
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented", # Or "completed" if providing dummy data
+            status=status,
             output=output_message,
             data=result_data_content
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published completion result for task {task.task_id} to {result_channel}. Completions: {len(completions)}")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
@@ -60,7 +77,7 @@ class CodeCompletionAgent(AgentCommunicationInterface):
                 capability_id="provide_code_completions",
                 task_type="code_completion_provide_suggestions",
                 description="Provides code completion suggestions based on current code context and cursor position.",
-                keywords=["code", "completion", "suggest", "autocomplete", "intellisense"],
+                keywords=["code", "completion", "suggest", "autocomplete", "intellisense", "complete", "python", "def", "snippet"],
                 required_input_keys=["code_context", "cursor_position", "file_path"], # Example keys
                 generates_output_keys=["completions_list"] # Example key
             )

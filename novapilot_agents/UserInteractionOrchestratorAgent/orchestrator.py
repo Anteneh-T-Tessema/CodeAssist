@@ -15,7 +15,6 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         self._active_tasks: Dict[str, Task] = {}
         self._task_results_queue: Optional[asyncio.Queue] = None
         self._agent_capabilities_registry: Dict[str, List[AgentCapability]] = {}
-        # Updated _known_agent_ids
         self._known_agent_ids: List[str] = [
             "codegen_agent_01",
             "code_understanding_agent_01",
@@ -217,12 +216,32 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     task_data["description"] = request_text
                     print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=True, path, and data.description for {task_data['target_file_path']}")
 
-            if assigned_task_type == "file_analysis_line_count":
-                if "file_path" not in task_data:
-                    potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
-                    if potential_paths:
-                        task_data["file_path"] = potential_paths[0]
-                        print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
+            elif "complete python def" in request_text.lower() and target_agent_id == "code_completion_agent_01":
+                task_data["code_context"] = "def "
+                task_data["cursor_position"] = 4
+                task_data["file_path"] = "dummy.py"
+                if "description" not in task_data: task_data["description"] = request_text
+                print(f"[{self.agent_id}] Test hook: Populated task_data for CodeCompletionAgent 'def' test.")
+
+            elif "debug file " in request_text.lower() and target_agent_id == "debugging_agent_01":
+                parts = request_text.split("debug file ", 1)
+                if len(parts) > 1:
+                    potential_file_path = parts[1].strip()
+                    task_data["file_path"] = potential_file_path
+                    task_data["code_block_id_or_lines"] = "N/A"
+                    task_data["execution_parameters"] = {}
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for DebuggingAgent test for file '{potential_file_path}'.")
+                else:
+                    print(f"[{self.agent_id}] Test hook: 'debug file' detected but could not extract file path from '{request_text}'.")
+
+            # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
+            if assigned_task_type == "file_analysis_line_count" and "file_path" not in task_data:
+                potential_paths = [word for word in request_text.split() if "." in word or "/" in word or "\\" in word]
+                if potential_paths:
+                    task_data["file_path"] = potential_paths[0]
+                    print(f"[{self.agent_id}] Heuristically extracted file_path for analysis: {task_data['file_path']}")
 
             # --- Input Validation Logic ---
             missing_keys = []

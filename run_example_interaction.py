@@ -126,6 +126,36 @@ async def main():
     if task_id_cg_editable:
         print(f"[Main] Orchestrator accepted request (expected CG Agent to proceed), Task ID: {task_id_cg_editable}")
 
+    # --- Test CodeCompletionAgent ---
+    print("\n--- Simulating User Request for Code Completion ---")
+    task_id_completion1 = await orchestrator.receive_user_request(
+        request_text="complete python def"
+        # Orchestrator's test hook should populate task.data for this.
+    )
+    if task_id_completion1:
+        print(f"[Main] Orchestrator accepted request (expected CodeCompletionAgent), Task ID: {task_id_completion1}")
+
+    # --- Test DebuggingAgent ---
+    print("\n--- Simulating User Requests for Debugging Agent ---")
+
+    # Test case 1: Debug existing file
+    task_id_debug1 = await orchestrator.receive_user_request(
+        request_text=f"debug file {SAMPLE_FILE_NAME}"
+        # Orchestrator's test hook should populate task.data.
+        # SAMPLE_FILE_NAME is "sample_code.py" which should exist.
+    )
+    if task_id_debug1:
+        print(f"[Main] Orchestrator accepted request (expected DebuggingAgent, file exists), Task ID: {task_id_debug1}")
+
+    # Test case 2: Debug non-existent file
+    DEBUG_NON_EXISTENT_FILE = "non_existent_debug_target.py"
+    task_id_debug2 = await orchestrator.receive_user_request(
+        request_text=f"debug file {DEBUG_NON_EXISTENT_FILE}"
+        # Orchestrator's test hook should populate task.data.
+    )
+    if task_id_debug2:
+        print(f"[Main] Orchestrator accepted request (expected DebuggingAgent, file not found), Task ID: {task_id_debug2}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
@@ -134,7 +164,9 @@ async def main():
     tasks_to_check = [
         task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2,
         task_id_unroutable, task_id_invalid_input,
-        task_id_cg_non_editable, task_id_cg_editable  # Added new task IDs
+        task_id_cg_non_editable, task_id_cg_editable,
+        task_id_completion1,
+        task_id_debug1, task_id_debug2 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:

@@ -1,9 +1,11 @@
 # novapilot_agents/DebuggingAgent/debugger.py
 import asyncio
+import os # For os.path.join and os.path.isabs
+import uuid # For generating unique response channel IDs
 from typing import Optional, Any, Callable, Dict, List
 
 from novapilot_core.aci import AgentCommunicationInterface
-from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext # Assuming ProjectContext might be useful
+from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext
 from novapilot_core.message_bus import message_bus
 
 class DebuggingAgent(AgentCommunicationInterface):
@@ -20,28 +22,108 @@ class DebuggingAgent(AgentCommunicationInterface):
         return self._agent_id
 
     async def _get_project_context(self) -> Optional[ProjectContext]:
-        # Placeholder, similar to CodeCompletionAgent
-        if self._project_context_cache:
+        if self._project_context_cache: # self._project_context_cache should be initialized in __init__
             return self._project_context_cache
-        print(f"[{self.agent_id}] _get_project_context called (placeholder - not fetching).")
-        return None
+
+        request_id = str(uuid.uuid4())
+        # Ensure self.agent_id is available (it's a property)
+        response_channel = f"agent_context_response_{self.agent_id}_{request_id}"
+
+        context_response_queue = None
+        try:
+            context_response_queue = await self._message_bus.subscribe(response_channel)
+
+            request_message = {
+                "type": "get_project_context",
+                "response_channel": response_channel
+            }
+            # Ensure self._message_bus is available
+            print(f"[{self.agent_id}] Requesting ProjectContext on 'context_requests'. Expecting response on '{response_channel}'.")
+            await self._message_bus.publish("context_requests", request_message)
+
+            try:
+                project_context_response = await asyncio.wait_for(context_response_queue.get(), timeout=5.0)
+                if isinstance(project_context_response, ProjectContext):
+                    self._project_context_cache = project_context_response
+                    print(f"[{self.agent_id}] Received and cached ProjectContext: ID={self._project_context_cache.project_id if self._project_context_cache else 'N/A'}")
+                    return self._project_context_cache
+                else:
+                    print(f"[{self.agent_id}] Received unexpected response type for ProjectContext: {type(project_context_response)}")
+                    return None
+            except asyncio.TimeoutError:
+                print(f"[{self.agent_id}] Timed out waiting for ProjectContext response on '{response_channel}'.")
+                return None
+            finally:
+                if context_response_queue:
+                    await self._message_bus.unsubscribe(response_channel, context_response_queue)
+                    print(f"[{self.agent_id}] Unsubscribed from temporary context response channel '{response_channel}'.")
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error during _get_project_context: {e}")
+            if context_response_queue and response_channel:
+                 try:
+                     await self._message_bus.unsubscribe(response_channel, context_response_queue)
+                     print(f"[{self.agent_id}] Unsubscribed from temporary context response channel '{response_channel}' due to exception.")
+                 except Exception as unsub_e:
+                     print(f"[{self.agent_id}] Error unsubscribing from '{response_channel}': {unsub_e}")
+            return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] Received Debugging task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        output_message = f"Debugging for '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "debug_session_id": "debug_placeholder_123"}
+        original_file_path = task.data.get("file_path")
+        resolved_file_path = original_file_path # Default to original
+        findings_summary = ""
+        status = "completed" # Default to completed, as the "act of debugging" (even if just a check) is done.
+        result_data_content = {
+            "debug_session_id": f"debug_session_{task.task_id}", # Example session ID
+            "original_file_path": original_file_path
+        }
+
+        if not original_file_path:
+            status = "failed"
+            output_message = "Missing 'file_path' in task data for debugging."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+        else:
+            project_context = await self._get_project_context()
+            if project_context and project_context.root_path:
+                if not os.path.isabs(original_file_path):
+                    resolved_file_path = os.path.join(project_context.root_path, original_file_path)
+                    print(f"[{self.agent_id}] Resolved relative path '{original_file_path}' to '{resolved_file_path}'.")
+            elif not project_context:
+                print(f"[{self.agent_id}] Warning: ProjectContext not available for task {task.task_id}. Assuming '{original_file_path}' is absolute or directly accessible.")
+
+            result_data_content["resolved_file_path"] = resolved_file_path
+            print(f"[{self.agent_id}] Checking existence of file: {resolved_file_path} for task {task.task_id}")
+            if os.path.exists(resolved_file_path):
+                output_message = f"File '{resolved_file_path}' exists. Further debugging steps not implemented."
+                findings_summary = f"File found: {resolved_file_path}. Ready for debugging."
+                result_data_content["file_exists"] = True
+                print(f"[{self.agent_id}] File '{resolved_file_path}' found.")
+            else:
+                # Still "completed" because the check was performed. The finding is the result.
+                output_message = f"File not found: {resolved_file_path}. Cannot proceed with debugging."
+                findings_summary = f"File not found: {resolved_file_path}."
+                result_data_content["file_exists"] = False
+                # Optionally, could set status to "failed" if file-not-found is a hard stop for any debugging.
+                # For now, let's consider the check itself as the completed task.
+                print(f"[{self.agent_id}] File '{resolved_file_path}' not found.")
+
+            result_data_content["findings_summary"] = findings_summary
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None # Only if overall task failed
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published debugging result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
@@ -51,7 +133,7 @@ class DebuggingAgent(AgentCommunicationInterface):
                 capability_id="debug_code_runtime",
                 task_type="debugging_runtime_analysis",
                 description="Analyzes code for runtime errors, helps set breakpoints, and inspects variables.",
-                keywords=["debug", "error", "runtime", "breakpoint", "inspect", "step through"],
+                keywords=["debug", "file", "error", "runtime", "breakpoint", "inspect", "step", "through"], # Added "file", atomized "step through"
                 required_input_keys=["file_path", "code_block_id_or_lines", "execution_parameters"], # Example keys
                 generates_output_keys=["debug_session_id", "findings_summary", "suggested_fixes"] # Example keys
             )
