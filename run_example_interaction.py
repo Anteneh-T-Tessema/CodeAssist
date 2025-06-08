@@ -87,12 +87,23 @@ async def main():
     if task_id_unroutable: # Will still get a task_id, but task status should be 'unroutable'
         print(f"[Main] Orchestrator accepted request (expected Unroutable), Task ID: {task_id_unroutable}")
 
+    # --- Test Input Validation Failure ---
+    print("\n--- Simulating User Request for Input Validation Failure ---")
+    # This request should match CodeUnderstandingAgent's capability by keywords,
+    # but will fail validation because "file_path" is missing and cannot be easily extracted.
+    task_id_invalid_input = await orchestrator.receive_user_request(
+        request_text="analyze the lines of my text", # No filename-like string
+        task_data={} # Explicitly empty task_data
+    )
+    if task_id_invalid_input:
+        print(f"[Main] Orchestrator accepted request (expected Input Validation Fail), Task ID: {task_id_invalid_input}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
     print("\n--- Checking Task Statuses in Orchestrator ---")
-    tasks_to_check = [task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2, task_id_unroutable]
+    tasks_to_check = [task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2, task_id_unroutable, task_id_invalid_input]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
             task_info = orchestrator._active_tasks[task_id]
