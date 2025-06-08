@@ -83,7 +83,7 @@ class AutomatedTestingAgent(AgentCommunicationInterface):
                 capability_id="run_unit_tests",
                 task_type="testing_run_unit_tests",
                 description="Runs unit tests for a specified module or file.",
-                keywords=["test", "unit test", "run tests", "execute tests", "pytest", "unittest"],
+                keywords=["test", "tests", "unit", "run", "execute", "pytest", "unittest", "module", "file"],
                 required_input_keys=["file_path_or_module", "test_suite_name"], # Example keys
                 generates_output_keys=["test_run_id", "pass_count", "fail_count", "test_report_summary"] # Example keys
             ),
@@ -91,7 +91,7 @@ class AutomatedTestingAgent(AgentCommunicationInterface):
                 capability_id="generate_test_scaffolding",
                 task_type="testing_generate_scaffolding",
                 description="Generates boilerplate/scaffolding for new test files.",
-                keywords=["generate tests", "scaffold tests", "new test file", "boilerplate test"],
+                keywords=["generate", "scaffold", "new", "test", "file", "boilerplate", "tests"],
                 required_input_keys=["file_path_to_test", "test_framework_preference"], # Example keys
                 generates_output_keys=["generated_test_file_path", "scaffolding_details"] # Example keys
             )

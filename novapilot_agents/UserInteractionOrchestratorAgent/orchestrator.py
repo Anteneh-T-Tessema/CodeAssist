@@ -202,7 +202,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             assigned_task_type = best_matched_capability.task_type
             print(f"[{self.agent_id}] Smart routing: Target={target_agent_id}, Capability='{best_matched_capability.description}' (Type: {assigned_task_type}), Score={highest_score} for request: '{request_text}'")
 
-            # --- Temporary Test Data Injection for 'editable' check ---
+            # --- Temporary Test Data Injection ---
             if target_agent_id == "codegen_agent_01" and best_matched_capability:
                 if "save to temp/test_non_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_non_editable.py"
@@ -235,6 +235,19 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     print(f"[{self.agent_id}] Test hook: Populated task_data for DebuggingAgent test for file '{potential_file_path}'.")
                 else:
                     print(f"[{self.agent_id}] Test hook: 'debug file' detected but could not extract file path from '{request_text}'.")
+
+            elif "run tests for " in request_text.lower() and target_agent_id == "automated_testing_agent_01":
+                parts = request_text.lower().split("run tests for ", 1)
+                if len(parts) > 1:
+                    original_parts = request_text.split("run tests for ", 1)
+                    potential_file_path_or_module = original_parts[1].strip()
+                    task_data["file_path_or_module"] = potential_file_path_or_module
+                    task_data["test_suite_name"] = "all"
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: Populated task_data for AutomatedTestingAgent test for '{potential_file_path_or_module}'.")
+                else:
+                    print(f"[{self.agent_id}] Test hook: 'run tests for' detected for AutomatedTestingAgent, but could not extract file/module from '{request_text}'.")
 
             # Heuristic file_path extraction (should run after specific test hooks for file_analysis if not already populated)
             if assigned_task_type == "file_analysis_line_count" and "file_path" not in task_data:

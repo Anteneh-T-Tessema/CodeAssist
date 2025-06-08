@@ -9,8 +9,10 @@ from novapilot_agents.DebuggingAgent import DebuggingAgent
 from novapilot_agents.AutomatedTestingAgent import AutomatedTestingAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
+SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
 
-async def create_sample_file_if_not_exists():
+async def create_sample_files(): # Renamed for clarity, or modify existing
+    # Create sample_code.py (existing logic)
     if not os.path.exists(SAMPLE_FILE_NAME):
         print(f"[Setup] Creating sample file: {SAMPLE_FILE_NAME}")
         with open(SAMPLE_FILE_NAME, "w", encoding="utf-8") as f:
@@ -25,8 +27,18 @@ async def create_sample_file_if_not_exists():
     else:
         print(f"[Setup] Sample file {SAMPLE_FILE_NAME} already exists.")
 
+    # Create sample_code_test.py
+    if not os.path.exists(SAMPLE_TEST_FILE_NAME):
+        print(f"[Setup] Creating sample test file: {SAMPLE_TEST_FILE_NAME}")
+        with open(SAMPLE_TEST_FILE_NAME, "w", encoding="utf-8") as f:
+            f.write("# A dummy test file for NovaPilot AutomatedTestingAgent\n")
+            f.write("def test_example_feature():\n")
+            f.write("    assert True\n")
+    else:
+        print(f"[Setup] Sample test file {SAMPLE_TEST_FILE_NAME} already exists.")
+
 async def main():
-    await create_sample_file_if_not_exists()
+    await create_sample_files() # New call
 
     orchestrator = UserInteractionOrchestratorAgent(agent_id="orchestrator_01")
     generator = CodeGenerationAgent(agent_id="codegen_agent_01")
@@ -156,6 +168,30 @@ async def main():
     if task_id_debug2:
         print(f"[Main] Orchestrator accepted request (expected DebuggingAgent, file not found), Task ID: {task_id_debug2}")
 
+    # --- Test AutomatedTestingAgent ---
+    print("\n--- Simulating User Requests for Automated Testing Agent ---")
+
+    # Test case 1: Run tests for a recognized _test.py file
+    task_id_test1 = await orchestrator.receive_user_request(
+        request_text=f"run tests for {SAMPLE_TEST_FILE_NAME}"
+    )
+    if task_id_test1:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, recognized test file), Task ID: {task_id_test1}")
+
+    # Test case 2: Run tests for a non-test file
+    task_id_test2 = await orchestrator.receive_user_request(
+        request_text=f"run tests for {SAMPLE_FILE_NAME}"
+    )
+    if task_id_test2:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, not a test file), Task ID: {task_id_test2}")
+
+    # Test case 3: Run tests with missing file path (should fail at agent or orchestrator validation if strict)
+    task_id_test3 = await orchestrator.receive_user_request(
+        request_text="run tests"
+    )
+    if task_id_test3:
+        print(f"[Main] Orchestrator accepted request (expected AT Agent, missing path), Task ID: {task_id_test3}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
@@ -166,7 +202,8 @@ async def main():
         task_id_unroutable, task_id_invalid_input,
         task_id_cg_non_editable, task_id_cg_editable,
         task_id_completion1,
-        task_id_debug1, task_id_debug2 # Added here
+        task_id_debug1, task_id_debug2,
+        task_id_test1, task_id_test2, task_id_test3 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
