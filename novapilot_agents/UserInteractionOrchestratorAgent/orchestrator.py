@@ -1,11 +1,12 @@
-# novapilot_agents/UserInteractionOrchestratorAgent/orchestrator.py # Corrected path in comment
+# novapilot_agents/UserInteractionOrchestratorAgent/orchestrator.py
 import asyncio
 import uuid # For generating unique task IDs
-from typing import Dict, Optional, Any, Callable, List # Add List
+import os # For os.getcwd()
+from typing import Dict, Optional, Any, Callable, List
 
-from novapilot_core.aci import AgentCommunicationInterface # Corrected import
-from novapilot_core.models import Task, ExecutionResult, AgentCapability # Corrected import
-from novapilot_core.message_bus import message_bus # Corrected import
+from novapilot_core.aci import AgentCommunicationInterface
+from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext # Add ProjectContext
+from novapilot_core.message_bus import message_bus
 
 class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
     def __init__(self, agent_id: str):
@@ -16,6 +17,9 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         self._agent_capabilities_registry: Dict[str, List[AgentCapability]] = {}
         self._known_agent_ids: List[str] = ["codegen_agent_01", "code_understanding_agent_01"] # Example
         self._discovery_response_queue: Optional[asyncio.Queue] = None
+        self._project_context: Optional[ProjectContext] = None
+        self._context_request_queue: Optional[asyncio.Queue] = None
+        self._initialize_project_context()
 
     @property
     def agent_id(self) -> str:
@@ -45,6 +49,54 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             if self._task_results_queue:
                 await self._message_bus.unsubscribe(results_channel, self._task_results_queue)
             print(f"[{self.agent_id}] Unsubscribed and stopped listening for results.")
+
+    def _initialize_project_context(self): # This can be a synchronous method
+        # For now, create a simple ProjectContext.
+        # root_path will be the current working directory.
+        # In a real app, this might load from a config file or CLI args.
+        root_dir = os.getcwd()
+        project_id = str(uuid.uuid4()) # Generate a unique ID for this session/project
+        project_name = os.path.basename(root_dir)
+
+        self._project_context = ProjectContext(
+            project_id=project_id,
+            root_path=root_dir,
+            project_name=project_name,
+            # main_language, vcs_type, etc., can be None or inferred later
+        )
+        print(f"[{self.agent_id}] Initialized ProjectContext: ID={project_id}, Name='{project_name}', Root='{root_dir}'")
+
+    async def _listen_for_context_requests(self):
+        request_channel = "context_requests"
+        self._context_request_queue = await self._message_bus.subscribe(request_channel)
+        print(f"[{self.agent_id}] Subscribed to '{request_channel}' for ProjectContext requests.")
+        try:
+            while True:
+                message = await self._context_request_queue.get()
+                if isinstance(message, dict):
+                    msg_type = message.get("type")
+                    response_channel = message.get("response_channel")
+                    if msg_type == "get_project_context" and response_channel:
+                        print(f"[{self.agent_id}] Received get_project_context request. Responding on '{response_channel}'.")
+                        if self._project_context:
+                            await self._message_bus.publish(response_channel, self._project_context)
+                        else:
+                            # Should not happen if _initialize_project_context is called in __init__
+                            print(f"[{self.agent_id}] Error: ProjectContext not initialized when request received.")
+                            # Optionally publish an error response
+                    else:
+                        print(f"[{self.agent_id}] Received unknown message on context_requests: {message}")
+                elif message == "stop_listening_context":
+                    print(f"[{self.agent_id}] Stop signal received for context_requests listener.")
+                    break
+                if self._context_request_queue: # Check queue exists
+                    self._context_request_queue.task_done()
+        except Exception as e:
+            print(f"[{self.agent_id}] Error in context_requests listener: {e}")
+        finally:
+            if self._context_request_queue:
+                await self._message_bus.unsubscribe(request_channel, self._context_request_queue)
+            print(f"[{self.agent_id}] Unsubscribed and stopped listening for context requests.")
 
     async def _listen_for_discovery_responses(self):
         discovery_channel = f"orchestrator_discovery_responses_{self.agent_id}"
@@ -120,16 +172,32 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         print(f"[{self.agent_id}] Agent discovery attempt finished. Registry: {self._agent_capabilities_registry}")
 
     async def start_listening(self):
-        # Start all background listening tasks for this agent
-        asyncio.create_task(self._listen_for_results())
-        asyncio.create_task(self._listen_for_discovery_responses()) # Add this line
+        # Assuming _listen_for_results and _listen_for_discovery_responses are already created tasks
+        self._listener_tasks_refs = [] # To store references to tasks for graceful shutdown
+        self._listener_tasks_refs.append(asyncio.create_task(self._listen_for_results()))
+        self._listener_tasks_refs.append(asyncio.create_task(self._listen_for_discovery_responses()))
+        self._listener_tasks_refs.append(asyncio.create_task(self._listen_for_context_requests())) # Add this
+        print(f"[{self.agent_id}] All primary listeners started.")
 
     async def stop_listening(self):
-        # Signal all background listening tasks to stop
+        print(f"[{self.agent_id}] Requesting all listeners to stop...")
         results_channel = f"task_results_{self.agent_id}"
         await self._message_bus.publish(results_channel, "stop_listening")
+
         discovery_channel = f"orchestrator_discovery_responses_{self.agent_id}"
-        await self._message_bus.publish(discovery_channel, "stop_listening_discovery") # Add this line
+        await self._message_bus.publish(discovery_channel, "stop_listening_discovery")
+
+        context_request_channel = "context_requests"
+        await self._message_bus.publish(context_request_channel, "stop_listening_context") # Add this
+
+        if hasattr(self, '_listener_tasks_refs') and self._listener_tasks_refs:
+            print(f"[{self.agent_id}] Gathering all primary listener tasks...")
+            await asyncio.gather(*self._listener_tasks_refs, return_exceptions=True)
+            print(f"[{self.agent_id}] All primary listener tasks gathered.")
+        else:
+            # Fallback sleep if tasks weren't stored, to allow listeners to process stop messages
+            await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] All stop signals sent and listeners presumably stopped.")
 
 
     async def receive_user_request(self, request_text: str, task_data: Optional[Dict[str, Any]] = None):
