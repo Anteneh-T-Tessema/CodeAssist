@@ -98,12 +98,35 @@ async def main():
     if task_id_invalid_input:
         print(f"[Main] Orchestrator accepted request (expected Input Validation Fail), Task ID: {task_id_invalid_input}")
 
+    # --- Test File Editable Check in CodeGenerationAgent ---
+    print("\n--- Simulating User Requests for Editable File Check ---")
+
+    # Test case 1: Target file is NOT editable
+    task_id_cg_non_editable = await orchestrator.receive_user_request(
+        request_text="generate python sum function and save to temp/test_non_editable.py"
+        # Orchestrator's test hook should set target_file_is_editable = False for this path
+    )
+    if task_id_cg_non_editable:
+        print(f"[Main] Orchestrator accepted request (expected CG Agent to fail on non-editable), Task ID: {task_id_cg_non_editable}")
+
+    # Test case 2: Target file IS editable
+    task_id_cg_editable = await orchestrator.receive_user_request(
+        request_text="generate python hello world and save to temp/test_editable.py"
+        # Orchestrator's test hook should set target_file_is_editable = True for this path
+    )
+    if task_id_cg_editable:
+        print(f"[Main] Orchestrator accepted request (expected CG Agent to proceed), Task ID: {task_id_cg_editable}")
+
 
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
     print("\n--- Checking Task Statuses in Orchestrator ---")
-    tasks_to_check = [task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2, task_id_unroutable, task_id_invalid_input]
+    tasks_to_check = [
+        task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2,
+        task_id_unroutable, task_id_invalid_input,
+        task_id_cg_non_editable, task_id_cg_editable  # Added new task IDs
+    ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
             task_info = orchestrator._active_tasks[task_id]

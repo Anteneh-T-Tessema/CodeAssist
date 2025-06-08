@@ -16,55 +16,98 @@ class CodeGenerationAgent(AgentCommunicationInterface):
         return self._agent_id
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}")
-        print(f"[{self.agent_id}] Processing task ID: {task.task_id} from {task.source_agent_id}...")
-        await asyncio.sleep(0.5) # Simulate work
+        print(f"[{self.agent_id}] Received task: {task.description}, TaskType: {task.task_type}, Data: {task.data}")
+
+        target_file_path = task.data.get("target_file_path")
+        # Get 'target_file_is_editable'. If key is missing, default to True.
+        # Only an explicit False value for 'target_file_is_editable' will trigger the block.
+        target_file_is_editable = task.data.get("target_file_is_editable", True)
+
+        if target_file_path is not None and target_file_is_editable is False:
+            error_message = f"Target file '{target_file_path}' is not marked as editable."
+            print(f"[{self.agent_id}] Task {task.task_id} failed pre-check: {error_message}")
+
+            result_data_dict = {
+                "target_file_path": target_file_path,
+                "editable_check_failed": True,
+                "original_request_description": task.description
+            }
+
+            result = ExecutionResult(
+                task_id=task.task_id,
+                status="failed",
+                output=error_message,
+                error_message=error_message,
+                data=result_data_dict
+            )
+
+            if task.source_agent_id:
+                result_channel = f"task_results_{task.source_agent_id}"
+                print(f"[{self.agent_id}] Publishing result for task {task.task_id} to '{result_channel}'.")
+                await self._message_bus.publish(result_channel, result)
+            else:
+                print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result for editable check failure.")
+            return # Important: Exit early
+
+        # --- Existing code generation logic continues below if the above check passes ---
+        print(f"[{self.agent_id}] Processing task ID: {task.task_id} for actual code generation (editable check passed or not applicable).")
 
         generated_code = None
-        error_message = None
+        error_message_for_generation = None
         status = "completed"
 
-        # Simple simulation of code generation based on task description
-        if "hello world function in python" in task.description.lower():
+        # Enhanced code generation logic using task.task_type and task.description
+        if task.task_type == "code_generation_python_hello_world" or        ("hello world function in python" in task.description.lower()) or        ("hello novapilot" in task.description.lower()):
             generated_code = (
                 "def greet():\n"
-                "    print(\"Hello, NovaPilot!\")\n" # Changed here
+                "    print(\"Hello, NovaPilot!\")\n"
                 "\n"
                 "greet()"
             )
-        elif "sum function" in task.description.lower():
+        elif task.task_type == "code_generation_python_sum" or          ("sum function" in task.description.lower()):
             generated_code = (
                 "def sum_two_numbers(a, b):\n"
                 "    return a + b\n"
             )
+        elif task.task_type == "code_generation_python_general": # General python code generation
+            generated_code = f"# Code for: {task.description}\npass # Placeholder for general Python code"
         else:
             status = "failed"
-            error_message = "Unsupported code generation request or unclear task description."
-            print(f"[{self.agent_id}] Task {task.task_id} failed: {error_message}")
+            error_message_for_generation = f"Unsupported code generation request. Task description: '{task.description}', Task type: '{task.task_type}' did not match any known patterns."
+            print(f"[{self.agent_id}] Task {task.task_id} failed generation: {error_message_for_generation}")
 
-
+        # --- Construct final ExecutionResult for the generation part ---
         current_data = {}
-        if status == "completed" and generated_code:
-            current_data["generated_code_string"] = generated_code # As advertised in generates_output_keys
-            output_summary = f"Successfully generated code for: {task.description}"
-        elif status == "failed":
-            output_summary = error_message
-        else: # Should not happen if logic is correct, but as a fallback
-            output_summary = "Processing finished with undefined state."
+        output_summary = ""
 
-        result_data = ExecutionResult(
+        if status == "completed" and generated_code:
+            current_data["generated_code_string"] = generated_code
+            output_summary = f"Successfully generated code for: {task.description}"
+            if target_file_path:
+                output_summary += f" (intended for {target_file_path})"
+                current_data["target_file_path"] = target_file_path
+        elif status == "failed":
+            output_summary = error_message_for_generation if error_message_for_generation else "Code generation failed for an unknown reason."
+            if target_file_path: # Still include target_file_path in data even if generation failed
+                current_data["target_file_path"] = target_file_path
+                current_data["generation_failed_for_target"] = True
+
+
+        generation_result = ExecutionResult(
             task_id=task.task_id,
             status=status,
-            output=output_summary, # Human-readable summary
-            error_message=error_message if status == "failed" else None,
-            data=current_data, # Store structured output here
+            output=output_summary,
+            error_message=error_message_for_generation if status == "failed" else None,
+            data=current_data,
             artifacts=[]
         )
 
-        # Publish result to the orchestrator's result channel
-        result_channel = f"task_results_{task.source_agent_id}"
-        print(f"[{self.agent_id}] Task {task.task_id} processing finished. Status: {status}. Publishing result to '{result_channel}'.")
-        await self._message_bus.publish(result_channel, result_data)
+        if task.source_agent_id:
+            result_channel = f"task_results_{task.source_agent_id}"
+            print(f"[{self.agent_id}] Publishing generation result for task {task.task_id} to '{result_channel}'.")
+            await self._message_bus.publish(result_channel, generation_result)
+        else:
+            print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish generation result.")
 
     async def start_listening(self):
         # Agent now listens to two types of messages: its own tasks and discovery requests
