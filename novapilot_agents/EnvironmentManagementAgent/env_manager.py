@@ -47,39 +47,113 @@ class EnvironmentManagementAgent(AgentCommunicationInterface):
         return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        await asyncio.sleep(0.1)
+        print(f"[{self.agent_id}] Received EnvMgmt task: {task.description}, Type: {task.task_type}, Data: {task.data}")
 
-        output_message = f"Environment management task '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "environment_details": "No changes."}
+        action = task.data.get("action")
+        package_name = task.data.get("package_name")
+        venv_path_request = task.data.get("venv_path")
 
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
+
+        if task.task_type == "env_list_python_dependencies": # Matches new capability's task_type
+            # Simulate listing dependencies
+            dummy_deps = ["requests==2.25.1 (simulated)", "numpy==1.20.3 (simulated)"]
+            result_data_content["dependencies_listed"] = dummy_deps
+            output_message = f"Simulated listing of {len(dummy_deps)} dependencies."
+            print(f"[{self.agent_id}] {output_message}")
+
+        elif task.task_type == "env_modify_python_dependency": # Matches new capability's task_type
+            action = task.data.get("action") # Action is expected from this task type
+            package_name = task.data.get("package_name") # Package name is expected
+
+            if not action:
+                status = "failed"
+                output_message = "Missing 'action' in task data for modify_python_dependency."
+            elif not package_name:
+                status = "failed"
+                output_message = f"Missing 'package_name' for action '{action}' in modify_python_dependency."
+            elif action.lower() in ["install", "add", "update", "remove"]:
+                output_message = f"Simulated '{action}' for package '{package_name}'. Version spec '{task.data.get('version_spec', 'any')}'."
+                result_data_content["action_performed"] = action
+                result_data_content["package_name"] = package_name
+                result_data_content["version_spec_used"] = task.data.get('version_spec', 'any')
+                result_data_content["dependency_management_log"] = f"Successfully simulated {action} for {package_name}."
+                print(f"[{self.agent_id}] {output_message}")
+            else:
+                status = "failed"
+                output_message = f"Unsupported action '{action}' for modify_python_dependency."
+
+            if status == "failed":
+                 result_data_content["error"] = output_message
+                 print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
+        elif task.task_type == "env_setup_python_venv": # Existing logic for this
+            if not venv_path_request:
+                status = "failed"
+                output_message = "Missing 'venv_path' in task data for virtual environment setup."
+            else:
+                project_ctx = await self._get_project_context()
+                resolved_venv_path = venv_path_request
+                if project_ctx and project_ctx.root_path and not os.path.isabs(venv_path_request):
+                    resolved_venv_path = os.path.join(project_ctx.root_path, venv_path_request)
+                    print(f"[{self.agent_id}] Resolved relative venv_path '{venv_path_request}' to '{resolved_venv_path}'.")
+
+                output_message = f"Simulated setup of virtual environment at '{resolved_venv_path}'. Python version '{task.data.get('python_version', 'system default')}'."
+                result_data_content["venv_path_created_simulated"] = resolved_venv_path
+                result_data_content["python_version_used_simulated"] = task.data.get('python_version', 'system default')
+                result_data_content["venv_activation_command"] = f"source {resolved_venv_path}/bin/activate (simulated)"
+                print(f"[{self.agent_id}] {output_message}")
+
+            if status == "failed":
+                 result_data_content["error"] = output_message
+                 print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+        else:
+            status = "failed"
+            output_message = f"Unknown or unhandled task type '{task.task_type}' for EnvironmentManagementAgent."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
+    # ... (rest of the result publishing logic remains the same) ...
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published environment management result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
     async def get_capabilities(self) -> List[AgentCapability]:
         return [
             AgentCapability(
-                capability_id="manage_dependencies_python",
-                task_type="env_manage_python_dependencies",
-                description="Manages Python project dependencies (e.g., install, update, list using pip/poetry).",
-                keywords=["environment", "dependencies", "python", "pip", "poetry", "install", "update", "requirements"],
-                required_input_keys=["action", "package_name", "version_spec"], # action: "install", "update", "remove", "list"
-                generates_output_keys=["dependencies_updated_list", "dependency_management_log", "status_message"]
+                capability_id="list_python_dependencies", # New specific capability ID
+                task_type="env_list_python_dependencies", # New specific task type
+                description="Lists Python project dependencies.",
+                keywords=["list", "show", "view", "python", "dependencies", "package", "packages", "installed"], # Atomized
+                required_input_keys=[], # No specific package_name needed for list
+                generates_output_keys=["dependencies_listed", "status_message"]
             ),
             AgentCapability(
+                capability_id="modify_python_dependency", # More general name for add/remove/update
+                task_type="env_modify_python_dependency", # New specific task type
+                description="Manages Python project dependencies (e.g., install, add, update, remove).",
+                keywords=["environment", "dependencies", "python", "pip", "poetry", "install", "update", "remove", "add", "package"], # Added "add"
+                required_input_keys=["action", "package_name"], # version_spec can be optional in task.data
+                generates_output_keys=["dependencies_updated_list", "dependency_management_log", "status_message"]
+            ),
+            AgentCapability( # Existing capability for venv setup
                 capability_id="setup_virtual_environment",
                 task_type="env_setup_python_venv",
                 description="Sets up or activates a Python virtual environment.",
-                keywords=["environment", "virtualenv", "venv", "python", "setup", "activate"],
+                keywords=["environment", "virtualenv", "venv", "python", "setup", "activate", "create"], # Added "create"
                 required_input_keys=["venv_path", "python_version"],
                 generates_output_keys=["venv_activation_command", "status_message"]
             )
