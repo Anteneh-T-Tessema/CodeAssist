@@ -351,6 +351,38 @@ async def main():
     if task_id_env5:
         print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, missing venv path), Task ID: {task_id_env5}")
 
+    # --- Test KnowledgeBaseAgent ---
+    print("\n--- Simulating User Requests for KnowledgeBase Agent ---")
+
+    # Test case 1: Query that should find a simulated result ("novapilot")
+    task_id_kb1 = await orchestrator.receive_user_request(
+        request_text="query kb for novapilot architecture details"
+        # Orchestrator's test hook should populate task.data.
+    )
+    if task_id_kb1:
+        print(f"[Main] Orchestrator accepted request (expected KB Agent, finds 'novapilot'), Task ID: {task_id_kb1}")
+
+    # Test case 2: Query that should find another simulated result ("hello")
+    task_id_kb2 = await orchestrator.receive_user_request(
+        request_text="query kb for hello world"
+    )
+    if task_id_kb2:
+        print(f"[Main] Orchestrator accepted request (expected KB Agent, finds 'hello'), Task ID: {task_id_kb2}")
+
+    # Test case 3: Query that should find no simulated results
+    task_id_kb3 = await orchestrator.receive_user_request(
+        request_text="query kb for unknown topic"
+    )
+    if task_id_kb3:
+        print(f"[Main] Orchestrator accepted request (expected KB Agent, no results), Task ID: {task_id_kb3}")
+
+    # Test case 4: Query with missing query string (should fail orchestrator validation or agent validation)
+    task_id_kb4 = await orchestrator.receive_user_request(
+        request_text="query kb for" # Hook might parse empty query_string or fail parsing
+    )
+    if task_id_kb4:
+        print(f"[Main] Orchestrator accepted request (expected KB Agent, missing query string), Task ID: {task_id_kb4}")
+
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
@@ -366,7 +398,8 @@ async def main():
         task_id_doc1, task_id_doc2, task_id_doc3,
         task_id_vcs1, task_id_vcs2,
         task_id_vuln1, task_id_vuln2, task_id_vuln3,
-        task_id_env1, task_id_env2, task_id_env3, task_id_env4, task_id_env5 # Added here
+        task_id_env1, task_id_env2, task_id_env3, task_id_env4, task_id_env5,
+        task_id_kb1, task_id_kb2, task_id_kb3, task_id_kb4 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
