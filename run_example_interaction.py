@@ -13,6 +13,9 @@ from novapilot_agents.VersionControlAgent import VersionControlAgent
 from novapilot_agents.VulnerabilityScanAgent import VulnerabilityScanAgent
 from novapilot_agents.EnvironmentManagementAgent import EnvironmentManagementAgent
 from novapilot_agents.PlatformIntegrationAgent import PlatformIntegrationAgent
+from novapilot_agents.KnowledgeBaseAgent import KnowledgeBaseAgent
+from novapilot_agents.AgentLifecycleManagerAgent import AgentLifecycleManagerAgent
+from novapilot_agents.AgentSandboxAgent import AgentSandboxAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
@@ -59,6 +62,9 @@ async def main():
     vuln_scanner = VulnerabilityScanAgent(agent_id="vulnerability_scan_agent_01")
     env_manager = EnvironmentManagementAgent(agent_id="environment_management_agent_01")
     platform_integrator = PlatformIntegrationAgent(agent_id="platform_integration_agent_01")
+    kb_manager = KnowledgeBaseAgent(agent_id="knowledge_base_agent_01")
+    lifecycle_mgr = AgentLifecycleManagerAgent(agent_id="agent_lifecycle_manager_agent_01")
+    sandbox_mgr = AgentSandboxAgent(agent_id="agent_sandbox_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -76,6 +82,9 @@ async def main():
     vuln_scanner_listener_task = asyncio.create_task(vuln_scanner.start_listening())
     env_manager_listener_task = asyncio.create_task(env_manager.start_listening())
     platform_integrator_listener_task = asyncio.create_task(platform_integrator.start_listening())
+    kb_manager_listener_task = asyncio.create_task(kb_manager.start_listening())
+    lifecycle_mgr_listener_task = asyncio.create_task(lifecycle_mgr.start_listening())
+    sandbox_mgr_listener_task = asyncio.create_task(sandbox_mgr.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -278,6 +287,70 @@ async def main():
     if task_id_vcs2:
         print(f"[Main] Orchestrator accepted request (expected VersionControlAgent), Task ID: {task_id_vcs2}")
 
+    # --- Test VulnerabilityScanAgent ---
+    print("\n--- Simulating User Requests for VulnerabilityScan Agent ---")
+
+    # Test case 1: Scan sample_code.py (expected to find a simulated vulnerability)
+    task_id_vuln1 = await orchestrator.receive_user_request(
+        request_text=f"scan vulnerabilities in {SAMPLE_FILE_NAME}"
+        # Orchestrator's test hook should populate task.data.
+        # SAMPLE_FILE_NAME is "sample_code.py".
+    )
+    if task_id_vuln1:
+        print(f"[Main] Orchestrator accepted request (expected VulnScanAgent, finds 'sample'), Task ID: {task_id_vuln1}")
+
+    # Test case 2: Scan README.md (expected to find no simulated vulnerability)
+    task_id_vuln2 = await orchestrator.receive_user_request(
+        request_text="scan file README.md for vulnerabilities"
+    )
+    if task_id_vuln2:
+        print(f"[Main] Orchestrator accepted request (expected VulnScanAgent, no 'sample'), Task ID: {task_id_vuln2}")
+
+    # Test case 3: Scan with missing path (should fail orchestrator validation or agent validation)
+    task_id_vuln3 = await orchestrator.receive_user_request(
+        request_text="scan vulnerabilities"
+    )
+    if task_id_vuln3:
+        print(f"[Main] Orchestrator accepted request (expected VulnScanAgent, missing path), Task ID: {task_id_vuln3}")
+
+    # --- Test EnvironmentManagementAgent ---
+    print("\n--- Simulating User Requests for Environment Management Agent ---")
+
+    # Test case 1: List dependencies
+    task_id_env1 = await orchestrator.receive_user_request(
+        request_text="list python dependencies"
+    )
+    if task_id_env1:
+        print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, list deps), Task ID: {task_id_env1}")
+
+    # Test case 2: Install a package
+    task_id_env2 = await orchestrator.receive_user_request(
+        request_text="install package requests version 2.28"
+    )
+    if task_id_env2:
+        print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, install pkg), Task ID: {task_id_env2}")
+
+    # Test case 3: Create a virtual environment
+    task_id_env3 = await orchestrator.receive_user_request(
+        request_text="create venv .myenv python 3.9"
+    )
+    if task_id_env3:
+        print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, create venv), Task ID: {task_id_env3}")
+
+    # Test case 4: Dependency management with missing package name
+    task_id_env4 = await orchestrator.receive_user_request(
+        request_text="add package version 1.0"
+    )
+    if task_id_env4:
+        print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, missing pkg name for add), Task ID: {task_id_env4}")
+
+    # Test case 5: Create venv with missing path
+    task_id_env5 = await orchestrator.receive_user_request(
+        request_text="create venv"
+    )
+    if task_id_env5:
+        print(f"[Main] Orchestrator accepted request (expected EnvMgmtAgent, missing venv path), Task ID: {task_id_env5}")
+
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
@@ -291,7 +364,9 @@ async def main():
         task_id_test1, task_id_test2, task_id_test3,
         task_id_refactor1, task_id_refactor2,
         task_id_doc1, task_id_doc2, task_id_doc3,
-        task_id_vcs1, task_id_vcs2 # Added here
+        task_id_vcs1, task_id_vcs2,
+        task_id_vuln1, task_id_vuln2, task_id_vuln3,
+        task_id_env1, task_id_env2, task_id_env3, task_id_env4, task_id_env5 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
@@ -318,6 +393,9 @@ async def main():
     await vuln_scanner.stop_listening()
     await env_manager.stop_listening()
     await platform_integrator.stop_listening()
+    await kb_manager.stop_listening()
+    await lifecycle_mgr.stop_listening()
+    await sandbox_mgr.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -350,9 +428,12 @@ async def main():
         refactorer_listener_task,   # New
         documenter_listener_task,
         vcs_handler_listener_task,
-        vuln_scanner_listener_task,         # New
-        env_manager_listener_task,        # New
-        platform_integrator_listener_task,  # New
+        vuln_scanner_listener_task,
+        env_manager_listener_task,
+        platform_integrator_listener_task,
+        kb_manager_listener_task,           # New
+        lifecycle_mgr_listener_task,      # New
+        sandbox_mgr_listener_task,          # New
         return_exceptions=True
     )
 

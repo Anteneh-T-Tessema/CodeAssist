@@ -1,4 +1,4 @@
-# novapilot_agents/PlatformIntegrationAgent/platform_integrator.py
+# novapilot_agents/AgentLifecycleManagerAgent/lifecycle_mgr.py
 import asyncio
 import uuid
 import os
@@ -8,13 +8,15 @@ from novapilot_core.aci import AgentCommunicationInterface
 from novapilot_core.models import Task, ExecutionResult, AgentCapability, ProjectContext
 from novapilot_core.message_bus import message_bus
 
-class PlatformIntegrationAgent(AgentCommunicationInterface):
+class AgentLifecycleManagerAgent(AgentCommunicationInterface):
     def __init__(self, agent_id: str):
         self._agent_id = agent_id
         self._message_bus = message_bus
         self._task_queue: Optional[asyncio.Queue] = None
         self._discovery_queue: Optional[asyncio.Queue] = None
         self._listener_tasks: List[asyncio.Task] = []
+        # This agent typically wouldn't need ProjectContext for its own direct operations
+        # but might use it if tasks involve project-specific lifecycle rules.
         self._project_context_cache: Optional[ProjectContext] = None
 
     @property
@@ -22,6 +24,7 @@ class PlatformIntegrationAgent(AgentCommunicationInterface):
         return self._agent_id
 
     async def _get_project_context(self) -> Optional[ProjectContext]:
+        # Included for consistency, though less likely to be used directly by this agent
         if self._project_context_cache:
             return self._project_context_cache
         request_id = str(uuid.uuid4())
@@ -47,94 +50,46 @@ class PlatformIntegrationAgent(AgentCommunicationInterface):
         return None
 
     async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received PlatformIntegration task: {task.description}, Type: {task.task_type}, Data: {task.data}")
+        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
+        await asyncio.sleep(0.1)
 
-        # Capability "notify_slack_channel" expects:
-        # required_input_keys=["slack_channel_id", "message_text", "notification_type"]
-
-        status = "completed"
-        output_message = ""
-        result_data_content = {"original_request_description": task.description}
-
-        # project_ctx = await self._get_project_context() # Available if needed for other integrations
-
-        if task.task_type == "platform_integration_slack_notification":
-            slack_channel_id = task.data.get("slack_channel_id")
-            message_text = task.data.get("message_text")
-            notification_type = task.data.get("notification_type", "info") # Default type
-
-            if not all([slack_channel_id, message_text]):
-                status = "failed"
-                missing = []
-                if not slack_channel_id: missing.append("slack_channel_id")
-                if not message_text: missing.append("message_text")
-                output_message = f"Missing required data for Slack notification: {', '.join(missing)}."
-                result_data_content["error"] = output_message
-                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
-            else:
-                # Simulate sending Slack message
-                output_message = f"Simulated sending message to Slack channel '{slack_channel_id}' (Type: {notification_type}): '{message_text}'."
-                result_data_content["notification_id"] = f"sim_slack_{str(uuid.uuid4())[:8]}"
-                result_data_content["delivery_status"] = "simulated_sent"
-                result_data_content["slack_channel_id"] = slack_channel_id
-                result_data_content["message_sent"] = message_text
-                print(f"[{self.agent_id}] {output_message}")
-
-        elif task.task_type == "platform_integration_github_pull_request":
-            # Placeholder for GitHub PR simulation - for now, just "not implemented" for this task type
-            output_message = f"GitHub PR integration for '{task.description}' not implemented in this basic version."
-            # Mark as 'completed' because the agent processed the type, but no action for now
-            result_data_content["status_message"] = "specific_action_not_implemented"
-            print(f"[{self.agent_id}] {output_message}")
-            # For a more complete stub, you might check for its required_input_keys here too.
-            # For now, this capability's tasks will appear to "succeed" but do nothing.
-        else:
-            status = "failed"
-            output_message = f"Unknown task type '{task.task_type}' for PlatformIntegrationAgent."
-            result_data_content["error"] = output_message
-            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
-
-        if status == "failed" and "error" not in result_data_content : # Ensure error key exists if failed
-            result_data_content["error"] = output_message
-
+        output_message = f"Agent lifecycle management task '{task.description}' not implemented yet."
+        result_data_content = {"status_message": "not_implemented", "operation_status": "unknown"}
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status=status,
+            status="not_implemented",
             output=output_message,
-            data=result_data_content,
-            error_message=output_message if status == "failed" else None
+            data=result_data_content
         )
-
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
-            print(f"[{self.agent_id}] Published platform integration result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
     async def get_capabilities(self) -> List[AgentCapability]:
         return [
             AgentCapability(
-                capability_id="integrate_with_github_pr",
-                task_type="platform_integration_github_pull_request",
-                description="Integrates with GitHub to create or update Pull Requests.",
-                keywords=["platform", "integration", "github", "pull request", "pr", "vcs hosting"],
-                required_input_keys=["repository_url", "branch_name", "pr_title", "pr_body", "target_branch"],
-                generates_output_keys=["pr_url", "pr_status", "integration_log"]
+                capability_id="lifecycle_start_agent",
+                task_type="lifecycle_manage_start",
+                description="Starts or activates a specified agent.",
+                keywords=["lifecycle", "agent", "start", "activate", "spawn", "manager"],
+                required_input_keys=["target_agent_id_to_start", "agent_config"],
+                generates_output_keys=["started_agent_id", "status_message"]
             ),
             AgentCapability(
-                capability_id="notify_slack_channel",
-                task_type="platform_integration_slack_notification",
-                description="Sends a notification message to a specified Slack channel.",
-                keywords=["platform", "integration", "slack", "notify", "message", "chatops"],
-                required_input_keys=["slack_channel_id", "message_text", "notification_type"],
-                generates_output_keys=["notification_id", "delivery_status"]
+                capability_id="lifecycle_stop_agent",
+                task_type="lifecycle_manage_stop",
+                description="Stops or deactivates a specified agent.",
+                keywords=["lifecycle", "agent", "stop", "deactivate", "terminate", "manager"],
+                required_input_keys=["target_agent_id_to_stop", "stop_reason"],
+                generates_output_keys=["stopped_agent_id", "status_message"]
             )
         ]
 
     async def _task_listener_loop(self):
-        channel_name = "platform_integration_tasks"
+        channel_name = "agent_lifecycle_tasks"
         self._task_queue = await self._message_bus.subscribe(channel_name)
         print(f"[{self.agent_id}] Subscribed to '{channel_name}'. Listening for tasks...")
         try:
@@ -187,7 +142,7 @@ class PlatformIntegrationAgent(AgentCommunicationInterface):
 
     async def stop_listening(self):
         print(f"[{self.agent_id}] Requesting listeners to stop...")
-        task_channel_name = "platform_integration_tasks"
+        task_channel_name = "agent_lifecycle_tasks"
         discovery_channel_name = "system_discovery_channel"
         await self._message_bus.publish(task_channel_name, f"stop_listening_{task_channel_name}")
         await self._message_bus.publish(discovery_channel_name, f"stop_listening_{discovery_channel_name}")
