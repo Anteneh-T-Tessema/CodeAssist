@@ -49,22 +49,72 @@ class AgentLifecycleManagerAgent(AgentCommunicationInterface):
                 await self._message_bus.unsubscribe(response_channel, context_response_queue)
         return None
 
-    async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        await asyncio.sleep(0.1)
+    # In AgentLifecycleManagerAgent class:
+    # Ensure 'Task', 'ExecutionResult', 'AgentCapability', 'List', 'Optional', 'Dict', 'Any', 'asyncio' are available.
+    # (uuid is also imported for _get_project_context, though not directly used in this _process_task)
 
-        output_message = f"Agent lifecycle management task '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "operation_status": "unknown"}
+    async def _process_task(self, task: Task):
+        print(f"[{self.agent_id}] Received AgentLifecycle task: {task.description}, Type: {task.task_type}, Data: {task.data}")
+
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
+
+        if task.task_type == "lifecycle_manage_start":
+            target_agent_id_to_start = task.data.get("target_agent_id_to_start")
+            # agent_config = task.data.get("agent_config") # Not used in this simulation
+
+            if not target_agent_id_to_start:
+                status = "failed"
+                output_message = "Missing 'target_agent_id_to_start' in task data for lifecycle_manage_start."
+                result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+            else:
+                # Simulate starting agent
+                await asyncio.sleep(0.1) # Simulate action time
+                output_message = f"Simulated START command for agent '{target_agent_id_to_start}'."
+                result_data_content["started_agent_id"] = target_agent_id_to_start
+                result_data_content["status_message"] = "simulated_started"
+                print(f"[{self.agent_id}] {output_message}")
+
+        elif task.task_type == "lifecycle_manage_stop":
+            target_agent_id_to_stop = task.data.get("target_agent_id_to_stop")
+            # stop_reason = task.data.get("stop_reason") # Not used in this simulation
+
+            if not target_agent_id_to_stop:
+                status = "failed"
+                output_message = "Missing 'target_agent_id_to_stop' in task data for lifecycle_manage_stop."
+                result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+            else:
+                # Simulate stopping agent
+                await asyncio.sleep(0.1) # Simulate action time
+                output_message = f"Simulated STOP command for agent '{target_agent_id_to_stop}'."
+                result_data_content["stopped_agent_id"] = target_agent_id_to_stop
+                result_data_content["status_message"] = "simulated_stopped"
+                print(f"[{self.agent_id}] {output_message}")
+
+        else:
+            status = "failed" # Or "not_implemented"
+            output_message = f"Unknown or unsupported task type '{task.task_type}' for AgentLifecycleManagerAgent."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
+        if status == "failed" and "error" not in result_data_content:
+            result_data_content["error"] = output_message
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published AgentLifecycle result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 

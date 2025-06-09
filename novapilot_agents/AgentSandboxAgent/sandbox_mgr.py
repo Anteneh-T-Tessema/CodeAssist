@@ -46,23 +46,113 @@ class AgentSandboxAgent(AgentCommunicationInterface):
                 await self._message_bus.unsubscribe(response_channel, context_response_queue)
         return None
 
-    async def _process_task(self, task: Task):
-        print(f"[{self.agent_id}] Received task: {task.description}, Type: {task.task_type}, Data: {task.data}")
-        # project_ctx = await self._get_project_context() # Might be needed for setting up sandbox relative to project root
-        await asyncio.sleep(0.1)
+    # In AgentSandboxAgent class:
+    # Ensure 'os', 'uuid', 'ProjectContext', 'Task', 'ExecutionResult', 'AgentCapability',
+    # 'List', 'Optional', 'Dict', 'Any', 'asyncio' are available.
 
-        output_message = f"Agent sandbox operation '{task.description}' not implemented yet."
-        result_data_content = {"status_message": "not_implemented", "sandbox_id": "sandbox_placeholder_123", "execution_report": "No execution."}
+    async def _process_task(self, task: Task):
+        print(f"[{self.agent_id}] Received AgentSandbox task: {task.description}, Type: {task.task_type}, Data: {task.data}")
+
+        status = "completed"
+        output_message = ""
+        result_data_content = {"original_request_description": task.description}
+        sandbox_id_for_op = task.data.get("sandbox_id_or_config", str(uuid.uuid4())[:8]) # Use provided or generate dummy
+
+        # project_ctx = await self._get_project_context() # Available if needed
+
+        if task.task_type == "sandbox_execute":
+            code_to_execute = task.data.get("code_to_execute")
+            language = task.data.get("language")
+            # sandbox_parameters = task.data.get("sandbox_parameters") # Not used in this simulation
+
+            if not all([code_to_execute, language]):
+                status = "failed"
+                missing = []
+                if not code_to_execute: missing.append("code_to_execute")
+                if not language: missing.append("language")
+                output_message = f"Missing required data for sandbox_execute: {', '.join(missing)}."
+                result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+            else:
+                await asyncio.sleep(0.2) # Simulate execution time
+                sim_stdout = ""
+                sim_stderr = ""
+                sim_exit_code = 0
+
+                if str(language).lower() == "python":
+                    if "print(" in str(code_to_execute):
+                        # Try to extract what's inside print() for a slightly more dynamic simulation
+                        try:
+                            # Very naive extraction, assumes print("...") or print('...')
+                            printed_content = str(code_to_execute).split("print(", 1)[1].split(")",1)[0]
+                            # Remove quotes if present
+                            if printed_content.startswith("'") and printed_content.endswith("'"):
+                                printed_content = printed_content[1:-1]
+                            elif printed_content.startswith('"') and printed_content.endswith('"'):
+                                printed_content = printed_content[1:-1]
+                            sim_stdout = f"Simulated Python output: {printed_content}"
+                        except:
+                            sim_stdout = "Simulated Python output: Execution produced some text."
+                    elif "error" in str(code_to_execute).lower():
+                        sim_stderr = "Simulated Python error: Something went wrong!"
+                        sim_exit_code = 1
+                    else:
+                        sim_stdout = "Simulated Python code executed successfully without specific print."
+                else:
+                    sim_stdout = f"Simulated execution of {language} code."
+
+                output_message = f"Simulated execution of '{language}' code in sandbox '{sandbox_id_for_op}'. Exit code: {sim_exit_code}."
+                result_data_content["sandbox_id"] = sandbox_id_for_op
+                result_data_content["execution_stdout"] = sim_stdout
+                result_data_content["execution_stderr"] = sim_stderr
+                result_data_content["exit_code"] = sim_exit_code
+                # result_data_content["resource_usage"] = {"cpu": "0.1s", "memory": "10MB"} # Example
+                print(f"[{self.agent_id}] {output_message}")
+
+        elif task.task_type == "sandbox_manage_env":
+            sandbox_action = task.data.get("sandbox_action")
+            # sandbox_id_or_config = task.data.get("sandbox_id_or_config") # Already got as sandbox_id_for_op
+
+            if not sandbox_action:
+                status = "failed"
+                output_message = "Missing 'sandbox_action' in task data for sandbox_manage_env."
+                result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+            else:
+                await asyncio.sleep(0.1) # Simulate action time
+                action_lower = str(sandbox_action).lower()
+                if action_lower in ["create", "delete", "get_status"]:
+                    output_message = f"Simulated '{action_lower}' action for sandbox '{sandbox_id_for_op}'."
+                    result_data_content["sandbox_id"] = sandbox_id_for_op
+                    result_data_content["sandbox_status"] = f"simulated_{action_lower}_completed" if action_lower != "get_status" else "simulated_ready"
+                    result_data_content["action_log"] = f"Action '{action_lower}' on sandbox '{sandbox_id_for_op}' simulated."
+                else:
+                    status = "failed"
+                    output_message = f"Unsupported sandbox_action: '{sandbox_action}'."
+                    result_data_content["error"] = output_message
+                print(f"[{self.agent_id}] {output_message}")
+
+        else:
+            status = "failed"
+            output_message = f"Unknown or unsupported task type '{task.task_type}' for AgentSandboxAgent."
+            result_data_content["error"] = output_message
+            print(f"[{self.agent_id}] Task {task.task_id} failed: {output_message}")
+
+        if status == "failed" and "error" not in result_data_content :
+            result_data_content["error"] = output_message
 
         result = ExecutionResult(
             task_id=task.task_id,
-            status="not_implemented",
+            status=status,
             output=output_message,
-            data=result_data_content
+            data=result_data_content,
+            error_message=output_message if status == "failed" else None
         )
+
         if task.source_agent_id:
             result_channel = f"task_results_{task.source_agent_id}"
             await self._message_bus.publish(result_channel, result)
+            print(f"[{self.agent_id}] Published AgentSandbox result for task {task.task_id} to {result_channel}.")
         else:
             print(f"[{self.agent_id}] Warning: Task {task.task_id} has no source_agent_id. Cannot publish result.")
 
@@ -72,7 +162,7 @@ class AgentSandboxAgent(AgentCommunicationInterface):
                 capability_id="sandbox_execute_code",
                 task_type="sandbox_execute",
                 description="Executes a given code block or script within a secure, isolated sandbox environment.",
-                keywords=["sandbox", "execute", "run code", "isolated environment", "secure execution", "script"],
+                keywords=["sandbox", "execute", "run", "codeblock", "script", "isolated", "secure", "sandboxed"],
                 required_input_keys=["code_to_execute", "language", "sandbox_parameters"], # sandbox_parameters: e.g., allowed network, file access
                 generates_output_keys=["sandbox_id", "execution_stdout", "execution_stderr", "exit_code", "resource_usage"]
             ),

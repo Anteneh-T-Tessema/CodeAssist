@@ -383,6 +383,86 @@ async def main():
     if task_id_kb4:
         print(f"[Main] Orchestrator accepted request (expected KB Agent, missing query string), Task ID: {task_id_kb4}")
 
+    # --- Test AgentLifecycleManagerAgent ---
+    print("\n--- Simulating User Requests for Agent Lifecycle Manager ---")
+
+    # Test case 1: Start an agent
+    DUMMY_AGENT_TO_START = "some_new_agent_id_123"
+    task_id_lc1 = await orchestrator.receive_user_request(
+        request_text=f"lifecycle start agent {DUMMY_AGENT_TO_START}"
+        # Orchestrator's test hook should populate task.data.
+    )
+    if task_id_lc1:
+        print(f"[Main] Orchestrator accepted request (expected LifecycleManager, start agent), Task ID: {task_id_lc1}")
+
+    # Test case 2: Stop an agent with a reason
+    DUMMY_AGENT_TO_STOP = "another_agent_id_456"
+    task_id_lc2 = await orchestrator.receive_user_request(
+        request_text=f"lifecycle stop agent {DUMMY_AGENT_TO_STOP} reason performing_maintenance"
+    )
+    if task_id_lc2:
+        print(f"[Main] Orchestrator accepted request (expected LifecycleManager, stop agent), Task ID: {task_id_lc2}")
+
+    # Test case 3: Start agent with missing agent ID in request (should fail validation)
+    task_id_lc3 = await orchestrator.receive_user_request(
+        request_text="lifecycle start agent"
+        # Hook will fail to parse target_agent_id_to_start
+    )
+    if task_id_lc3:
+        print(f"[Main] Orchestrator accepted request (expected LifecycleManager, missing target for start), Task ID: {task_id_lc3}")
+
+    # Test case 4: Stop agent with missing agent ID
+    task_id_lc4 = await orchestrator.receive_user_request(
+        request_text="lifecycle stop agent because testing"
+    )
+    if task_id_lc4:
+        print(f"[Main] Orchestrator accepted request (expected LifecycleManager, missing target for stop), Task ID: {task_id_lc4}")
+
+    # --- Test AgentSandboxAgent ---
+    print("\n--- Simulating User Requests for Agent Sandbox ---")
+
+    # Test case 1: Execute simple Python print
+    task_id_sb1 = await orchestrator.receive_user_request(
+        request_text="sandbox execute python code 'print(\"Hello from Sandbox!\")'"
+    )
+    if task_id_sb1:
+        print(f"[Main] Orchestrator accepted request (Sandbox: execute Python print), Task ID: {task_id_sb1}")
+
+    # Test case 2: Execute Python code that implies an error
+    task_id_sb2 = await orchestrator.receive_user_request(
+        request_text="sandbox execute python code 'x = 1 / 0 # error!'"
+    )
+    if task_id_sb2:
+        print(f"[Main] Orchestrator accepted request (Sandbox: execute Python error), Task ID: {task_id_sb2}")
+
+    # Test case 3: Execute with missing code string
+    task_id_sb3 = await orchestrator.receive_user_request(
+        request_text="sandbox execute python code" # Missing the actual code
+    )
+    if task_id_sb3:
+        print(f"[Main] Orchestrator accepted request (Sandbox: execute missing code), Task ID: {task_id_sb3}")
+
+    # Test case 4: Manage sandbox - create
+    task_id_sb4 = await orchestrator.receive_user_request(
+        request_text="sandbox create my_secure_env"
+    )
+    if task_id_sb4:
+        print(f"[Main] Orchestrator accepted request (Sandbox: manage create), Task ID: {task_id_sb4}")
+
+    # Test case 5: Manage sandbox - delete
+    task_id_sb5 = await orchestrator.receive_user_request(
+        request_text="sandbox delete old_sandbox_123"
+    )
+    if task_id_sb5:
+        print(f"[Main] Orchestrator accepted request (Sandbox: manage delete), Task ID: {task_id_sb5}")
+
+    # Test case 6: Manage sandbox with missing action
+    task_id_sb6 = await orchestrator.receive_user_request(
+        request_text="sandbox my_env_details" # Missing create/delete/get_status
+    )
+    if task_id_sb6:
+        print(f"[Main] Orchestrator accepted request (Sandbox: manage missing action), Task ID: {task_id_sb6}")
+
     print("\n--- Allowing time for task processing (approx 4 seconds) ---")
     await asyncio.sleep(4)
 
@@ -399,7 +479,9 @@ async def main():
         task_id_vcs1, task_id_vcs2,
         task_id_vuln1, task_id_vuln2, task_id_vuln3,
         task_id_env1, task_id_env2, task_id_env3, task_id_env4, task_id_env5,
-        task_id_kb1, task_id_kb2, task_id_kb3, task_id_kb4 # Added here
+        task_id_kb1, task_id_kb2, task_id_kb3, task_id_kb4,
+        task_id_lc1, task_id_lc2, task_id_lc3, task_id_lc4,
+        task_id_sb1, task_id_sb2, task_id_sb3, task_id_sb4, task_id_sb5, task_id_sb6 # Added here
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:
