@@ -153,24 +153,46 @@ async def main():
     if task_id_invalid_input:
         print(f"[Main] Orchestrator accepted request (expected Input Validation Fail), Task ID: {task_id_invalid_input}")
 
-    # --- Test File Editable Check in CodeGenerationAgent ---
-    print("\n--- Simulating User Requests for Editable File Check ---")
+    # --- Test CodeGenerationAgent File Writing ---
+    print("\n--- Simulating User Requests for Code Generation Agent File Writing ---")
 
-    # Test case 1: Target file is NOT editable
-    task_id_cg_non_editable = await orchestrator.receive_user_request(
+    # Test case 1 (existing, now with file write implication): Target file is NOT editable
+    # Request: "generate python sum function and save to temp/test_non_editable.py"
+    # Orchestrator hook sets target_file_is_editable = False
+    # Expected: Agent's editable pre-check fails, no file written. Status: failed.
+    task_id_cg_non_editable_write = await orchestrator.receive_user_request(
         request_text="generate python sum function and save to temp/test_non_editable.py"
-        # Orchestrator's test hook should set target_file_is_editable = False for this path
     )
-    if task_id_cg_non_editable:
-        print(f"[Main] Orchestrator accepted request (expected CG Agent to fail on non-editable), Task ID: {task_id_cg_non_editable}")
+    if task_id_cg_non_editable_write:
+        print(f"[Main] Orchestrator accepted CG request (non-editable file write), Task ID: {task_id_cg_non_editable_write}")
 
-    # Test case 2: Target file IS editable
-    task_id_cg_editable = await orchestrator.receive_user_request(
+    # Test case 2 (existing, now with file write implication): Target file IS editable (but might be a specific test path)
+    # Request: "generate python hello world and save to temp/test_editable.py"
+    # Orchestrator hook sets target_file_is_editable = True
+    # Expected: Agent's editable pre-check passes. File "temp/test_editable.py" is written with hello world code. Status: completed.
+    task_id_cg_editable_write = await orchestrator.receive_user_request(
         request_text="generate python hello world and save to temp/test_editable.py"
-        # Orchestrator's test hook should set target_file_is_editable = True for this path
     )
-    if task_id_cg_editable:
-        print(f"[Main] Orchestrator accepted request (expected CG Agent to proceed), Task ID: {task_id_cg_editable}")
+    if task_id_cg_editable_write:
+        print(f"[Main] Orchestrator accepted CG request (editable file write to temp), Task ID: {task_id_cg_editable_write}")
+
+    # Test case 3: Generate code and save to a new file in a new directory
+    NEW_SCRIPT_PATH = "generated_code/cg_new_script.py"
+    task_id_cg_new_file = await orchestrator.receive_user_request(
+        request_text=f"generate python code for a simple class MyClass with an init method and save to {NEW_SCRIPT_PATH}"
+        # Orchestrator general "save to" hook will set target_file_path and default target_file_is_editable=True
+    )
+    if task_id_cg_new_file:
+        print(f"[Main] Orchestrator accepted CG request (new file write), Task ID: {task_id_cg_new_file}")
+
+    # Test case 4: Generate code, save to existing file (e.g., sample_code.py), expecting overwrite
+    # For this, we need to ensure the orchestrator hook handles this without a specific "temp/" path.
+    # The general " save to " hook should work.
+    task_id_cg_overwrite_sample = await orchestrator.receive_user_request(
+        request_text=f"generate python code for a new function called overwritten_function and save to {SAMPLE_FILE_NAME}"
+    )
+    if task_id_cg_overwrite_sample:
+        print(f"[Main] Orchestrator accepted CG request (overwrite sample file), Task ID: {task_id_cg_overwrite_sample}")
 
     # --- Test CodeCompletionAgent ---
     print("\n--- Simulating User Request for Code Completion ---")
@@ -476,7 +498,7 @@ async def main():
     tasks_to_check = [
         task_id_cg1, task_id_cu1, task_id_cg2, task_id_cu2,
         task_id_unroutable, task_id_invalid_input,
-        task_id_cg_non_editable, task_id_cg_editable,
+        # task_id_cg_non_editable, task_id_cg_editable, # Superseded by more specific tests below
         task_id_completion1,
         task_id_debug1, task_id_debug2,
         task_id_test1, task_id_test2, task_id_test3,
@@ -487,7 +509,12 @@ async def main():
         task_id_env1, task_id_env2, task_id_env3, task_id_env4, task_id_env5,
         task_id_kb1, task_id_kb2, task_id_kb3, task_id_kb4,
         task_id_lc1, task_id_lc2, task_id_lc3, task_id_lc4,
-        task_id_sb1, task_id_sb2, task_id_sb3, task_id_sb4, task_id_sb5, task_id_sb6 # Added here
+        task_id_sb1, task_id_sb2, task_id_sb3, task_id_sb4, task_id_sb5, task_id_sb6,
+        # Add new/repurposed CG task IDs
+        task_id_cg_non_editable_write,
+        task_id_cg_editable_write,
+        task_id_cg_new_file,
+        task_id_cg_overwrite_sample
     ]
     for task_id in tasks_to_check:
         if task_id and task_id in orchestrator._active_tasks:

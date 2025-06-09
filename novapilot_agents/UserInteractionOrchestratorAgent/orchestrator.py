@@ -229,18 +229,49 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             print(f"[{self.agent_id}] Smart routing: Target={target_agent_id}, Capability='{best_matched_capability.description}' (Type: {assigned_task_type}), Score={highest_score} for request: '{request_text}'")
 
             # --- Temporary Test Data Injection ---
-            if target_agent_id == "codegen_agent_01" and best_matched_capability:
+            # This is part of the larger elif chain for test data injection
+
+            elif target_agent_id == "codegen_agent_01" and best_matched_capability:
+                # Default description if not already set by more specific parsing below
+                if "description" not in task_data:
+                    task_data["description"] = request_text
+
+                # Specific test case for non-editable
                 if "save to temp/test_non_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_non_editable.py"
                     task_data["target_file_is_editable"] = False
-                    task_data["description"] = request_text
-                    print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=False, path, and data.description for {task_data['target_file_path']}")
+                    print(f"[{self.agent_id}] Test hook (CG): Set non-editable for temp/test_non_editable.py")
 
+                # Specific test case for editable (explicitly for testing the flag)
                 elif "save to temp/test_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_editable.py"
-                    task_data["target_file_is_editable"] = True
-                    task_data["description"] = request_text
-                    print(f"[{self.agent_id}] Test hook: Set target_file_is_editable=True, path, and data.description for {task_data['target_file_path']}")
+                    task_data["target_file_is_editable"] = True # Explicitly True for this test
+                    print(f"[{self.agent_id}] Test hook (CG): Set editable for temp/test_editable.py")
+
+                # General case for "generate ... and save to FILENAME"
+                # Example: "generate python hello world and save to generated_code/hello.py"
+                elif " save to " in request_text.lower():
+                    try:
+                        # Extract the filename part
+                        # Assuming format "... save to path/to/file.ext"
+                        path_part = request_text.lower().split(" save to ", 1)[1].strip()
+                        # Get original case from original request_text for the path
+                        original_path_part = request_text.split(" save to ", 1)[1].strip()
+
+                        task_data["target_file_path"] = original_path_part
+                        # For new files or general saves where editable isn't specified in request, assume True
+                        if "target_file_is_editable" not in task_data: # Don't override explicit non-editable tests
+                            task_data["target_file_is_editable"] = True
+                        print(f"[{self.agent_id}] Test hook (CG): Parsed target_file_path='{original_path_part}' for save. Editable defaulted/kept as {task_data.get('target_file_is_editable')}.")
+                    except IndexError:
+                        print(f"[{self.agent_id}] Test hook (CG): ' save to ' detected but failed to parse file path from '{request_text}'.")
+                    except Exception as e:
+                        print(f"[{self.agent_id}] Test hook (CG): Error parsing ' save to ' request '{request_text}': {e}")
+
+                # If "description" is still needed by a capability but not set by specific parsing,
+                # it's already set at the start of this codegen_agent_01 block.
+                # This ensures that even if no specific file-related keywords are matched for data injection,
+                # the task can still pass validation if only 'description' is required by the matched capability.
 
             elif "complete python def" in request_text.lower() and target_agent_id == "code_completion_agent_01":
                 task_data["code_context"] = "def "
