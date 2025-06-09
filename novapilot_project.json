@@ -1,0 +1,11 @@
+{
+    "project_name": "NovaPilot Test Project from File",
+    "main_language": "python",
+    "vcs_type": "git",
+    "vcs_branch": "feature/file-context-loading",
+    "project_id_override": "project_from_file_12345",
+    "metadata": {
+        "description": "This is a test project configuration for NovaPilot, loaded from a JSON file.",
+        "version": "0.1.0"
+    }
+}

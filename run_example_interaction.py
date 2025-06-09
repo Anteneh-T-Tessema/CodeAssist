@@ -101,6 +101,18 @@ async def main():
     # discover_agents has its own sleep, so orchestrator should have the registry populated.
     print(f"[Main] Orchestrator's capability registry: {orchestrator._agent_capabilities_registry}")
 
+    # Add this block for verifying ProjectContext loading:
+    print("\n--- Orchestrator's Project Context ---")
+    if orchestrator._project_context:
+        print(f"[Main] Project ID: {orchestrator._project_context.project_id}")
+        print(f"[Main] Project Name: {orchestrator._project_context.project_name}")
+        print(f"[Main] Root Path: {orchestrator._project_context.root_path}")
+        print(f"[Main] Main Language: {orchestrator._project_context.main_language}")
+        print(f"[Main] VCS Type: {orchestrator._project_context.vcs_type}")
+        print(f"[Main] VCS Branch: {orchestrator._project_context.vcs_branch}")
+        print(f"[Main] Metadata: {orchestrator._project_context.metadata}")
+    else:
+        print("[Main] Orchestrator's ProjectContext is None.")
 
     # --- Test User Requests for Smart Routing ---
     print("\n--- Simulating User Requests for Smart Routing ---")

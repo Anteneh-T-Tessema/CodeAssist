@@ -81,7 +81,7 @@ class CodeGenerationAgent(AgentCommunicationInterface):
             generated_code = "def greet():\n    print(\"Hello, NovaPilot!\")\n\ngreet()"
         elif task.task_type == "code_generation_python_sum" or              ("sum function" in task.description.lower()):
             generated_code = "def sum_two_numbers(a, b):\n    return a + b\n"
-        elif task.task_type == "code_generation_python_general":
+        elif task.task_type == "code_generation_python": # General python code generation
             generated_code = f"# Code for: {task.description}\npass # Placeholder for general Python code"
         else:
             status = "failed"
