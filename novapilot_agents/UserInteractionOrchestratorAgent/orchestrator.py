@@ -2,6 +2,7 @@
 import asyncio
 import uuid # For generating unique task IDs
 import os # For os.getcwd()
+import json # Added
 from typing import Dict, Optional, Any, Callable, List
 
 from novapilot_core.aci import AgentCommunicationInterface
@@ -66,16 +67,64 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 await self._message_bus.unsubscribe(results_channel, self._task_results_queue)
             print(f"[{self.agent_id}] Unsubscribed and stopped listening for results.")
 
-    def _initialize_project_context(self):
-        root_dir = os.getcwd()
-        project_id = str(uuid.uuid4())
-        project_name = os.path.basename(root_dir)
+    # Ensure 'os', 'uuid', 'json', 'ProjectContext' are imported.
+
+    def _initialize_project_context(self): # This can be a synchronous method
+        root_dir = os.getcwd() # Project root is where the script/orchestrator runs
+
+        # Default values
+        project_id_default = str(uuid.uuid4())
+        project_name_default = os.path.basename(root_dir)
+        main_lang_default = "python"
+        vcs_type_default = None
+        vcs_branch_default = None
+        metadata_default = {}
+        loaded_from_file = False
+
+        config_file_name = "novapilot_project.json"
+        config_file_path = os.path.join(root_dir, config_file_name)
+
+        project_id_to_use = project_id_default
+        project_name_to_use = project_name_default
+        main_lang_to_use = main_lang_default
+        vcs_type_to_use = vcs_type_default
+        vcs_branch_to_use = vcs_branch_default
+        metadata_to_use = metadata_default
+
+        try:
+            if os.path.exists(config_file_path):
+                with open(config_file_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+
+                project_name_to_use = config_data.get("project_name", project_name_default)
+                main_lang_to_use = config_data.get("main_language", main_lang_default)
+                vcs_type_to_use = config_data.get("vcs_type", vcs_type_default)
+                vcs_branch_to_use = config_data.get("vcs_branch", vcs_branch_default)
+                project_id_to_use = config_data.get("project_id_override", project_id_default)
+                metadata_to_use = config_data.get("metadata", metadata_default)
+                loaded_from_file = True
+                print(f"[{self.agent_id}] Successfully loaded ProjectContext from '{config_file_path}'.")
+            else:
+                print(f"[{self.agent_id}] Config file '{config_file_path}' not found. Using default/inferred ProjectContext values.")
+        except json.JSONDecodeError as e:
+            print(f"[{self.agent_id}] Error decoding '{config_file_path}': {e}. Using default/inferred ProjectContext values.")
+        except Exception as e:
+            print(f"[{self.agent_id}] Error reading '{config_file_path}': {e}. Using default/inferred ProjectContext values.")
+
         self._project_context = ProjectContext(
-            project_id=project_id,
+            project_id=project_id_to_use,
             root_path=root_dir,
-            project_name=project_name,
+            project_name=project_name_to_use,
+            main_language=main_lang_to_use,
+            vcs_type=vcs_type_to_use,
+            vcs_branch=vcs_branch_to_use,
+            metadata=metadata_to_use
         )
-        print(f"[{self.agent_id}] Initialized ProjectContext: ID={project_id}, Name='{project_name}', Root='{root_dir}'")
+
+        log_source = "from file" if loaded_from_file else "using defaults/inferred values"
+        print(f"[{self.agent_id}] Initialized ProjectContext ({log_source}): ID={self._project_context.project_id}, "
+              f"Name='{self._project_context.project_name}', Root='{self._project_context.root_path}', "
+              f"Lang='{self._project_context.main_language}', VCS='{self._project_context.vcs_type}', Branch='{self._project_context.vcs_branch}'.")
 
     async def _listen_for_context_requests(self):
         request_channel = "context_requests"
@@ -231,7 +280,7 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             # --- Temporary Test Data Injection ---
             # This is part of the larger elif chain for test data injection
 
-            elif target_agent_id == "codegen_agent_01" and best_matched_capability:
+            if target_agent_id == "codegen_agent_01" and best_matched_capability:
                 # Default description if not already set by more specific parsing below
                 if "description" not in task_data:
                     task_data["description"] = request_text
@@ -240,27 +289,30 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                 if "save to temp/test_non_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_non_editable.py"
                     task_data["target_file_is_editable"] = False
+                    # task_data["description"] is already set or will be set by the general logic
                     print(f"[{self.agent_id}] Test hook (CG): Set non-editable for temp/test_non_editable.py")
 
                 # Specific test case for editable (explicitly for testing the flag)
                 elif "save to temp/test_editable.py" in request_text.lower():
                     task_data["target_file_path"] = "temp/test_editable.py"
                     task_data["target_file_is_editable"] = True # Explicitly True for this test
+                    # task_data["description"] is already set or will be set by the general logic
                     print(f"[{self.agent_id}] Test hook (CG): Set editable for temp/test_editable.py")
 
                 # General case for "generate ... and save to FILENAME"
                 # Example: "generate python hello world and save to generated_code/hello.py"
-                elif " save to " in request_text.lower():
+                elif " save to " in request_text.lower(): # Check this after more specific "temp/" paths
                     try:
                         # Extract the filename part
                         # Assuming format "... save to path/to/file.ext"
-                        path_part = request_text.lower().split(" save to ", 1)[1].strip()
+                        # path_part = request_text.lower().split(" save to ", 1)[1].strip() # Not needed for original_path_part
                         # Get original case from original request_text for the path
                         original_path_part = request_text.split(" save to ", 1)[1].strip()
 
                         task_data["target_file_path"] = original_path_part
                         # For new files or general saves where editable isn't specified in request, assume True
-                        if "target_file_is_editable" not in task_data: # Don't override explicit non-editable tests
+                        # This ensures that if a more specific rule (like non-editable) already set it, we don't override.
+                        if "target_file_is_editable" not in task_data:
                             task_data["target_file_is_editable"] = True
                         print(f"[{self.agent_id}] Test hook (CG): Parsed target_file_path='{original_path_part}' for save. Editable defaulted/kept as {task_data.get('target_file_is_editable')}.")
                     except IndexError:
@@ -270,8 +322,6 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
 
                 # If "description" is still needed by a capability but not set by specific parsing,
                 # it's already set at the start of this codegen_agent_01 block.
-                # This ensures that even if no specific file-related keywords are matched for data injection,
-                # the task can still pass validation if only 'description' is required by the matched capability.
 
             elif "complete python def" in request_text.lower() and target_agent_id == "code_completion_agent_01":
                 task_data["code_context"] = "def "
