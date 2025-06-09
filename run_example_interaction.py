@@ -16,6 +16,8 @@ from novapilot_agents.PlatformIntegrationAgent import PlatformIntegrationAgent
 from novapilot_agents.KnowledgeBaseAgent import KnowledgeBaseAgent
 from novapilot_agents.AgentLifecycleManagerAgent import AgentLifecycleManagerAgent
 from novapilot_agents.AgentSandboxAgent import AgentSandboxAgent
+from novapilot_agents.GuardrailAgent import GuardrailAgent
+from novapilot_agents.EvaluationAgent import EvaluationAgent
 
 SAMPLE_FILE_NAME = "sample_code.py"
 SAMPLE_TEST_FILE_NAME = "sample_code_test.py"
@@ -65,6 +67,8 @@ async def main():
     kb_manager = KnowledgeBaseAgent(agent_id="knowledge_base_agent_01")
     lifecycle_mgr = AgentLifecycleManagerAgent(agent_id="agent_lifecycle_manager_agent_01")
     sandbox_mgr = AgentSandboxAgent(agent_id="agent_sandbox_agent_01")
+    guardrail_checker = GuardrailAgent(agent_id="guardrail_agent_01")
+    evaluator = EvaluationAgent(agent_id="evaluation_agent_01")
 
     print("--- Starting Smart Routing Agent Interaction Example ---")
 
@@ -85,6 +89,8 @@ async def main():
     kb_manager_listener_task = asyncio.create_task(kb_manager.start_listening())
     lifecycle_mgr_listener_task = asyncio.create_task(lifecycle_mgr.start_listening())
     sandbox_mgr_listener_task = asyncio.create_task(sandbox_mgr.start_listening())
+    guardrail_listener_task = asyncio.create_task(guardrail_checker.start_listening())
+    evaluator_listener_task = asyncio.create_task(evaluator.start_listening())
 
     # Crucial: Allow time for agents to subscribe to channels, especially system_discovery_channel
     await asyncio.sleep(0.5)
@@ -511,6 +517,8 @@ async def main():
     await kb_manager.stop_listening()
     await lifecycle_mgr.stop_listening()
     await sandbox_mgr.stop_listening()
+    await guardrail_checker.stop_listening()
+    await evaluator.stop_listening()
 
     print("\n--- Waiting for Agent Listeners to Finish ---")
     # Gather all main listener tasks
@@ -546,9 +554,11 @@ async def main():
         vuln_scanner_listener_task,
         env_manager_listener_task,
         platform_integrator_listener_task,
-        kb_manager_listener_task,           # New
-        lifecycle_mgr_listener_task,      # New
-        sandbox_mgr_listener_task,          # New
+        kb_manager_listener_task,
+        lifecycle_mgr_listener_task,
+        sandbox_mgr_listener_task,
+        guardrail_listener_task,        # New or ensure present
+        evaluator_listener_task,          # New or ensure present
         return_exceptions=True
     )
 
