@@ -186,7 +186,22 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
         if not self._agent_capabilities_registry:
             print(f"[{self.agent_id}] Warning: Agent capabilities registry is empty. Running discover_agents() first is recommended.")
 
-        for agent_id_iter_reg, capabilities_iter_reg in self._agent_capabilities_registry.items():
+        # --- START Special Routing Hint for "sandbox execute" ---
+        limit_search_to_agent_id = None
+        if "sandbox execute" in request_text.lower():
+            limit_search_to_agent_id = "agent_sandbox_agent_01"
+            print(f"[{self.agent_id}] Applying search limit for 'sandbox execute' to agent {limit_search_to_agent_id}.")
+        # --- END Special Routing Hint ---
+
+        agents_to_search_dict = self._agent_capabilities_registry
+        if limit_search_to_agent_id:
+            if limit_search_to_agent_id in self._agent_capabilities_registry:
+                agents_to_search_dict = {limit_search_to_agent_id: self._agent_capabilities_registry[limit_search_to_agent_id]}
+            else: # Should not happen if known_agents is correct
+                print(f"[{self.agent_id}] Warning: Hinted target agent {limit_search_to_agent_id} for 'sandbox execute' not in registry. Full search will proceed.")
+                # agents_to_search_dict remains self._agent_capabilities_registry
+
+        for agent_id_iter_reg, capabilities_iter_reg in agents_to_search_dict.items():
             for capability_iter_reg in capabilities_iter_reg:
                 capability_keywords = set(k.lower() for k in capability_iter_reg.keywords)
                 common_keywords = request_keywords.intersection(capability_keywords)
@@ -535,6 +550,125 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
                     print(f"[{self.agent_id}] Test hook: 'query kb for ' detected for KnowledgeBaseAgent, but failed to parse query terms from '{request_text}'. Ensure format '... for QUERY_TERMS'.")
                 except Exception as e:
                     print(f"[{self.agent_id}] Test hook: Error parsing 'query kb for ' request for KnowledgeBaseAgent '{request_text}': {e}")
+
+            # Add new elif for AgentLifecycleManagerAgent test:
+            elif "lifecycle " in request_text.lower() and target_agent_id == "agent_lifecycle_manager_agent_01":
+                # Example: "lifecycle start agent some_agent_id_to_start"
+                # Example: "lifecycle stop agent another_agent_id_to_stop because test"
+                try:
+                    text_lower = request_text.lower()
+                    action_part = None
+                    target_agent_id_part = None
+
+                    if "lifecycle start agent " in text_lower:
+                        action_part = "start"
+                        target_agent_id_part = request_text.split("lifecycle start agent ", 1)[1].strip()
+                        # Populate required_input_keys for "lifecycle_start_agent":
+                        # ["target_agent_id_to_start", "agent_config"]
+                        task_data["target_agent_id_to_start"] = target_agent_id_part
+                        task_data["agent_config"] = {"simulated_config": True} # Placeholder
+
+                    elif "lifecycle stop agent " in text_lower:
+                        action_part = "stop"
+                        # "lifecycle stop agent AGENT_ID reason REASON_TEXT"
+                        temp_parts = request_text.split("lifecycle stop agent ", 1)[1].split(" reason ", 1)
+                        target_agent_id_part = temp_parts[0].strip()
+
+                        # Populate required_input_keys for "lifecycle_stop_agent":
+                        # ["target_agent_id_to_stop", "stop_reason"]
+                        task_data["target_agent_id_to_stop"] = target_agent_id_part
+                        if len(temp_parts) > 1:
+                            task_data["stop_reason"] = temp_parts[1].strip()
+                        else:
+                            task_data["stop_reason"] = "No reason provided (simulated hook)." # Placeholder
+
+                    if action_part and target_agent_id_part:
+                        if "description" not in task_data: # Ensure description for orchestrator validation
+                            task_data["description"] = request_text
+                        print(f"[{self.agent_id}] Test hook: Populated task_data for AgentLifecycleManagerAgent '{action_part}' test for agent '{target_agent_id_part}'.")
+                    else:
+                        print(f"[{self.agent_id}] Test hook: 'lifecycle' detected for AgentLifecycleManagerAgent, but failed to parse specific action/target from '{request_text}'.")
+
+                except IndexError:
+                    print(f"[{self.agent_id}] Test hook: 'lifecycle' detected for AgentLifecycleManagerAgent, but failed to parse action/target from '{request_text}'.")
+                except Exception as e:
+                    print(f"[{self.agent_id}] Test hook: Error parsing 'lifecycle' request for AgentLifecycleManagerAgent '{request_text}': {e}")
+
+            # Add new elif for AgentSandboxAgent test:
+            elif "sandbox " in request_text.lower() and target_agent_id == "agent_sandbox_agent_01": # This check for target_agent_id is now somewhat redundant if the hint worked, but good for robustness
+                task_data_populated_by_hook = False
+                text_lower = request_text.lower()
+
+                # Hook for "sandbox_execute"
+                # Example: "sandbox execute python code 'print("Hello Sandbox")'"
+                if "execute " in text_lower:
+                    try:
+                        # "sandbox execute LANG code CODE_STRING"
+                        parts = text_lower.split("execute ", 1)[1].split(" code ", 1)
+                        language_part = parts[0].strip()
+                        # Extract code from original request_text to preserve casing and quotes
+                        original_code_part = request_text.split(" code ", 1)[1].strip()
+                        # Remove leading/trailing single/double quotes if present, as they might be for the whole string
+                        if (original_code_part.startswith("'") and original_code_part.endswith("'")) or \
+                           (original_code_part.startswith('"') and original_code_part.endswith('"')):
+                            original_code_part = original_code_part[1:-1]
+
+                        task_data["language"] = language_part
+                        task_data["code_to_execute"] = original_code_part
+                        # Populate other required keys for "sandbox_execute_code" capability:
+                        # required_input_keys=["code_to_execute", "language", "sandbox_parameters"]
+                        task_data["sandbox_parameters"] = {"network": "none", "timeout": "5s"} # Placeholder
+                        task_data_populated_by_hook = True
+                        print(f"[{self.agent_id}] Test hook: Populated task_data for AgentSandboxAgent 'execute' test. Lang: '{language_part}'.")
+                    except IndexError:
+                        print(f"[{self.agent_id}] Test hook: 'sandbox execute' detected but failed to parse lang/code. Format: '... execute LANG code CODE_STRING'.")
+                    except Exception as e:
+                        print(f"[{self.agent_id}] Test hook: Error parsing 'sandbox execute' request: {e}")
+
+                # Hook for "sandbox_manage_env"
+                # Example: "sandbox create my_sandbox_env"
+                # Example: "sandbox delete old_env"
+                # Example: "sandbox get_status active_env"
+                elif "create " in text_lower or "delete " in text_lower or "get_status " in text_lower or "manage " in text_lower : # "manage" is generic
+                    try:
+                        action_part = None
+                        id_or_config_part = None
+
+                        if "create " in text_lower:
+                            action_part = "create"
+                            id_or_config_part = request_text.lower().split("create ",1)[1].strip()
+                        elif "delete " in text_lower:
+                            action_part = "delete"
+                            id_or_config_part = request_text.lower().split("delete ",1)[1].strip()
+                        elif "get_status " in text_lower:
+                            action_part = "get_status"
+                            id_or_config_part = request_text.lower().split("get_status ",1)[1].strip()
+                        elif "manage " in text_lower: # More generic, might need specific action after "manage"
+                            action_part = request_text.lower().split("manage ",1)[1].split(" ",1)[0].strip() # e.g. "manage create myenv"
+                            id_or_config_part = request_text.lower().split(action_part,1)[1].strip()
+
+
+                        if action_part:
+                            task_data["sandbox_action"] = action_part
+                            # Populate other required keys for "sandbox_manage_environment" capability:
+                            # required_input_keys=["sandbox_action", "sandbox_id_or_config"]
+                            task_data["sandbox_id_or_config"] = id_or_config_part if id_or_config_part else "default_sandbox" # Placeholder if not parsed
+                            task_data_populated_by_hook = True
+                            print(f"[{self.agent_id}] Test hook: Populated task_data for AgentSandboxAgent 'manage_env' test. Action: '{action_part}'.")
+                        else:
+                             print(f"[{self.agent_id}] Test hook: 'sandbox manage' action detected but specific action (create/delete/get_status) not clear from '{request_text}'.")
+                    except IndexError:
+                        print(f"[{self.agent_id}] Test hook: 'sandbox manage' action detected but failed to parse action/id from '{request_text}'.")
+                    except Exception as e:
+                        print(f"[{self.agent_id}] Test hook: Error parsing 'sandbox manage' request: {e}")
+
+                if task_data_populated_by_hook:
+                    if "description" not in task_data:
+                        task_data["description"] = request_text
+                else: # If no specific hook matched but routed here
+                    if "description" not in task_data and target_agent_id == "agent_sandbox_agent_01":
+                         task_data["description"] = request_text
+                    print(f"[{self.agent_id}] Test hook: No specific data injection for AgentSandbox request '{request_text}', ensured description exists.")
 
             # elif "store in kb " in request_text.lower() and target_agent_id == "knowledge_base_agent_01":
             #    # Placeholder for kb_store test hook if needed later
