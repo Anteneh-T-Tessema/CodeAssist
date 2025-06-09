@@ -27,10 +27,12 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "vulnerability_scan_agent_01",
             "environment_management_agent_01",
             "platform_integration_agent_01",
-            "knowledge_base_agent_01",
-            "agent_lifecycle_manager_agent_01",
-            "agent_sandbox_agent_01"
-        ]
+            "knowledge_base_agent_01",          # New
+            "agent_lifecycle_manager_agent_01", # New
+            "agent_sandbox_agent_01",           # New
+            "guardrail_agent_01",               # New
+            "evaluation_agent_01"               # New
+        ] # Total 16 agents
         self._discovery_response_queue: Optional[asyncio.Queue] = None
         self._project_context: Optional[ProjectContext] = None
         self._context_request_queue: Optional[asyncio.Queue] = None
@@ -749,8 +751,10 @@ class UserInteractionOrchestratorAgent(AgentCommunicationInterface):
             "platform_integration_agent_01": "platform_integration_tasks",
             "knowledge_base_agent_01": "knowledge_base_tasks",
             "agent_lifecycle_manager_agent_01": "agent_lifecycle_tasks",
-            "agent_sandbox_agent_01": "agent_sandbox_tasks"
-        }
+            "agent_sandbox_agent_01": "agent_sandbox_tasks",
+            "guardrail_agent_01": "guardrail_tasks",
+            "evaluation_agent_01": "evaluation_tasks"
+        } # Total 16 agents
         target_channel = channel_map.get(task.target_agent_id)
         if target_channel:
             task.status = "dispatched"
